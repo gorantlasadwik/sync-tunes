@@ -92,15 +92,19 @@ Look for these debug messages in your app:
 4. Add these environment variables:
 
 ```
-SPOTIFY_CLIENT_ID = 135a8058b3014bc588fdb12c602f1c3a
-SPOTIFY_CLIENT_SECRET = f68044395a4443928e4a278367ee7057
-YOUTUBE_CLIENT_ID = 338295193309-ksafb0obnf24oa5eje5mk4jnv5a1msen.apps.googleusercontent.com
-YOUTUBE_CLIENT_SECRET = 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
+SPOTIFY_CLIENT_ID = [Your Spotify Client ID]
+SPOTIFY_CLIENT_SECRET = [Your Spotify Client Secret]
+YOUTUBE_CLIENT_ID = [Your YouTube Client ID]
+YOUTUBE_CLIENT_SECRET = [Your YouTube Client Secret]
 SECRET_KEY = sync-tunes-secret-key-2024-secure-random-string
 FLASK_ENV = production
 ```
 
 **Important**: After adding these, click **Save Changes** and your app will automatically redeploy.
+
+**Note**: Replace the placeholder values with your actual API credentials:
+- **Spotify**: Get from [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+- **YouTube**: Get from [Google Cloud Console](https://console.developers.google.com/)
 
 ## 🚨 **If Still Not Working:**
 

@@ -883,6 +883,9 @@ def spotify_callback():
             return redirect(url_for('dashboard'))
         
         # Exchange code for access token
+        print(f"Spotify OAuth config - Client ID: {SPOTIFY_CLIENT_ID[:10]}...")
+        print(f"Spotify OAuth config - Redirect URI: {SPOTIFY_REDIRECT_URI}")
+        
         spotify_oauth = SpotifyOAuth(
             client_id=SPOTIFY_CLIENT_ID,
             client_secret=SPOTIFY_CLIENT_SECRET,

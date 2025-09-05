@@ -84,11 +84,23 @@ Look for these debug messages in your app:
 
 ## 🔑 **Environment Variables Check:**
 
-Make sure these are set in your Render dashboard:
+### **Set these in your Render Dashboard:**
+
+1. Go to your Render dashboard
+2. Click on your `sync-tunes` service
+3. Go to **Environment** tab
+4. Add these environment variables:
+
 ```
-SPOTIFY_CLIENT_ID=135a8058b3014bc588fdb12c602f1c3a
-SPOTIFY_CLIENT_SECRET=f68044395a4443928e4a278367ee7057
+SPOTIFY_CLIENT_ID = 135a8058b3014bc588fdb12c602f1c3a
+SPOTIFY_CLIENT_SECRET = f68044395a4443928e4a278367ee7057
+YOUTUBE_CLIENT_ID = 338295193309-ksafb0obnf24oa5eje5mk4jnv5a1msen.apps.googleusercontent.com
+YOUTUBE_CLIENT_SECRET = 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
+SECRET_KEY = sync-tunes-secret-key-2024-secure-random-string
+FLASK_ENV = production
 ```
+
+**Important**: After adding these, click **Save Changes** and your app will automatically redeploy.
 
 ## 🚨 **If Still Not Working:**
 

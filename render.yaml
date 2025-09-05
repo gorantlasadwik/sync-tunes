@@ -9,13 +9,13 @@ services:
       - key: SECRET_KEY
         value: sync-tunes-secret-key-2024-secure-random-string
       - key: SPOTIFY_CLIENT_ID
-        value: 135a8058b3014bc588fdb12c602f1c3a
+        value: your_spotify_client_id_here
       - key: SPOTIFY_CLIENT_SECRET
-        value: f68044395a4443928e4a278367ee7057
+        value: your_spotify_client_secret_here
       - key: YOUTUBE_CLIENT_ID
-        value: 338295193309-ksafb0obnf24oa5eje5mk4jnv5a1msen.apps.googleusercontent.com
+        value: your_youtube_client_id_here
       - key: YOUTUBE_CLIENT_SECRET
-        value: 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
+        value: your_youtube_client_secret_here
       - key: FLASK_ENV
         value: production
       - key: FLASK_DEBUG

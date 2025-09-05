@@ -1377,19 +1377,27 @@ def sync_playlist_songs():
         
         # Try to update the real platform playlist
         platform_songs_added = 0
+        print(f"Sync debug - Platform: {platform.platform_name if platform else 'None'}")
+        print(f"Sync debug - User account token: {'Present' if user_account.auth_token else 'Missing'}")
+        print(f"Songs to add to platform: {len(songs_to_add_to_platform)}")
+        
         if platform and user_account.auth_token and songs_to_add_to_platform:
             if platform.platform_name == 'YouTube':
+                print("Calling update_youtube_playlist...")
                 platform_songs_added = update_youtube_playlist(
                     user_account.auth_token, 
                     target_playlist, 
                     songs_to_add_to_platform
                 )
+                print(f"YouTube sync result: {platform_songs_added} songs added")
             elif platform.platform_name == 'Spotify':
+                print("Calling update_spotify_playlist...")
                 platform_songs_added = update_spotify_playlist(
                     user_account.auth_token, 
                     target_playlist, 
                     songs_to_add_to_platform
                 )
+                print(f"Spotify sync result: {platform_songs_added} songs added")
         
         # Create sync log - record the TARGET playlist where songs were added
         sync_log = SyncLog(

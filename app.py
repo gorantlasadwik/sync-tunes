@@ -92,11 +92,19 @@ def fetch_spotify_playlists(user_id, access_token):
         # Create Spotify client with error handling
         sp = spotipy.Spotify(auth=access_token)
         
-        # Test the token first
+        # Test the token first with better error handling
         try:
             user_info = sp.current_user()
+            print(f"Spotify user info: {user_info}")
         except Exception as token_error:
             print(f"Spotify token error: {token_error}")
+            # Check if it's a 403 error specifically
+            if hasattr(token_error, 'http_status') and token_error.http_status == 403:
+                print("Spotify 403 error - user may not be registered or app not configured properly")
+                flash('Spotify connection failed: Please check if your Spotify account is properly set up and try reconnecting.', 'error')
+            else:
+                flash('Spotify connection failed: Invalid or expired token. Please reconnect.', 'error')
+            
             # Mark account as disconnected
             platform = Platform.query.filter_by(platform_name='Spotify').first()
             if platform:
@@ -885,9 +893,18 @@ def spotify_callback():
         token_info = spotify_oauth.get_access_token(code)
         access_token = token_info['access_token']
         
-        # Get user info from Spotify
+        # Get user info from Spotify with error handling
         sp = spotipy.Spotify(auth=access_token)
-        user_info = sp.current_user()
+        try:
+            user_info = sp.current_user()
+            print(f"Spotify callback - user info: {user_info}")
+        except Exception as e:
+            print(f"Spotify callback error: {e}")
+            if hasattr(e, 'http_status') and e.http_status == 403:
+                flash('Spotify connection failed: Your account may not be registered or the app needs proper configuration. Please check your Spotify Developer Dashboard settings.', 'error')
+            else:
+                flash('Spotify connection failed: Unable to get user information. Please try again.', 'error')
+            return redirect(url_for('dashboard'))
         
         # Get or create platform
         platform = Platform.query.filter_by(platform_name='Spotify').first()
@@ -969,12 +986,19 @@ def youtube_callback():
             headers=headers
         )
         
+        print(f"YouTube channel response status: {channel_response.status_code}")
+        if channel_response.status_code != 200:
+            print(f"YouTube channel error: {channel_response.text}")
+            flash('YouTube connection failed: Unable to get channel information. Please try again.', 'error')
+            return redirect(url_for('dashboard'))
+        
         if channel_response.status_code == 200:
             channel_data = channel_response.json()
             if channel_data.get('items'):
                 channel_info = channel_data['items'][0]['snippet']
-                youtube_username = (channel_info.get('customUrl') or 
-                                 channel_info.get('title') or 
+                # Use the actual channel title as username, fallback to customUrl, then ID
+                youtube_username = (channel_info.get('title') or 
+                                 channel_info.get('customUrl') or 
                                  f"user_{current_user.user_id}")
                 
                 # Get the Gmail account ID for conflict checking

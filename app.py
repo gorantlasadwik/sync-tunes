@@ -794,7 +794,7 @@ def connect_platform():
                 client_id=SPOTIFY_CLIENT_ID,
                 client_secret=SPOTIFY_CLIENT_SECRET,
                 redirect_uri=SPOTIFY_REDIRECT_URI,
-                scope='playlist-read-private playlist-read-collaborative user-read-private'
+                scope='playlist-read-private playlist-read-collaborative user-read-private playlist-modify-public playlist-modify-private'
             )
             auth_url = spotify_oauth.get_authorize_url()
             return redirect(auth_url)
@@ -890,7 +890,7 @@ def spotify_callback():
             client_id=SPOTIFY_CLIENT_ID,
             client_secret=SPOTIFY_CLIENT_SECRET,
             redirect_uri=SPOTIFY_REDIRECT_URI,
-            scope='playlist-read-private playlist-read-collaborative user-read-private'
+            scope='playlist-read-private playlist-read-collaborative user-read-private playlist-modify-public playlist-modify-private'
         )
         
         token_info = spotify_oauth.get_access_token(code)

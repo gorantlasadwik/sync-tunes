@@ -1292,7 +1292,23 @@ def debug_logs():
     try:
         with open('/tmp/sync_debug.log', 'r') as f:
             logs = f.read()
-        return f"<pre>{logs}</pre>"
+        return f"""
+        <html>
+        <head>
+            <title>Debug Logs</title>
+            <meta http-equiv="refresh" content="5">
+            <style>
+                body {{ font-family: monospace; background: #1a1a1a; color: #00ff00; }}
+                pre {{ white-space: pre-wrap; word-wrap: break-word; }}
+                .refresh {{ color: #ffff00; }}
+            </style>
+        </head>
+        <body>
+            <div class="refresh">Auto-refreshing every 5 seconds...</div>
+            <pre>{logs}</pre>
+        </body>
+        </html>
+        """
     except FileNotFoundError:
         return "No debug logs found yet. Try syncing first."
     except Exception as e:
@@ -1353,6 +1369,16 @@ def sync_playlist_songs():
     print(f"Source playlist ID: {request.form.get('source_playlist_id')}")
     print(f"Target playlist ID: {request.form.get('target_playlist_id')}")
     print(f"Song IDs: {request.form.getlist('song_ids')}")
+    
+    # Immediate file logging
+    try:
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"=== SYNC_PLAYLIST_SONGS CALLED {datetime.now()} ===\n")
+            f.write(f"Source playlist ID: {request.form.get('source_playlist_id')}\n")
+            f.write(f"Target playlist ID: {request.form.get('target_playlist_id')}\n")
+            f.write(f"Song IDs: {request.form.getlist('song_ids')}\n")
+    except Exception as e:
+        print(f"File logging error: {e}")
     
     try:
         source_playlist_id = request.form.get('source_playlist_id')

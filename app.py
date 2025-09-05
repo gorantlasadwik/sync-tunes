@@ -56,8 +56,8 @@ else:
     YOUTUBE_REDIRECT_URI = os.getenv('YOUTUBE_REDIRECT_URI', 'http://localhost:5000/youtube_callback')
 
 # YouTube OAuth Configuration
-YOUTUBE_CLIENT_ID = os.getenv('YOUTUBE_CLIENT_ID', '997908151865-9nt083uov355usa1gael1mlmo9ubmbta.apps.googleusercontent.com')
-YOUTUBE_CLIENT_SECRET = os.getenv('YOUTUBE_CLIENT_SECRET', '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')
+YOUTUBE_CLIENT_ID = os.getenv('YOUTUBE_CLIENT_ID')
+YOUTUBE_CLIENT_SECRET = os.getenv('YOUTUBE_CLIENT_SECRET')
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()

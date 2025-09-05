@@ -1306,7 +1306,7 @@ def test_debug():
         # Test file logging
         with open('/tmp/sync_debug.log', 'a') as f:
             f.write(f"=== TEST DEBUG {datetime.now()} ===\n")
-            f.write(f"User: {current_user.username}\n")
+            f.write(f"User: {current_user.email if hasattr(current_user, 'email') else 'Unknown'}\n")
             f.write(f"Test successful!\n")
         
         return f"Debug test successful! Check /debug_logs to see the log entry."

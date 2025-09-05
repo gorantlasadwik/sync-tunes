@@ -1298,6 +1298,21 @@ def debug_logs():
     except Exception as e:
         return f"Error reading logs: {str(e)}"
 
+@app.route('/test_debug')
+@login_required
+def test_debug():
+    """Test debug logging"""
+    try:
+        # Test file logging
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"=== TEST DEBUG {datetime.now()} ===\n")
+            f.write(f"User: {current_user.username}\n")
+            f.write(f"Test successful!\n")
+        
+        return f"Debug test successful! Check /debug_logs to see the log entry."
+    except Exception as e:
+        return f"Debug test failed: {str(e)}"
+
 @app.route('/cleanup_logs')
 @login_required
 def cleanup_logs():
@@ -1334,6 +1349,11 @@ def cleanup_logs():
 @login_required
 def sync_playlist_songs():
     """Sync selected songs from one playlist to another"""
+    print("=== SYNC_PLAYLIST_SONGS CALLED ===")
+    print(f"Source playlist ID: {request.form.get('source_playlist_id')}")
+    print(f"Target playlist ID: {request.form.get('target_playlist_id')}")
+    print(f"Song IDs: {request.form.getlist('song_ids')}")
+    
     try:
         source_playlist_id = request.form.get('source_playlist_id')
         target_playlist_id = request.form.get('target_playlist_id')

@@ -457,6 +457,9 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
 
 def update_youtube_playlist(access_token, playlist, songs_to_add):
     """Update a YouTube playlist with new songs (simplified version)"""
+    print(f"=== update_youtube_playlist CALLED ===")
+    print(f"Playlist: {playlist.name}")
+    print(f"Songs to add: {len(songs_to_add)}")
     try:
         import requests
         
@@ -1377,13 +1380,16 @@ def sync_playlist_songs():
         
         # Try to update the real platform playlist
         platform_songs_added = 0
+        print(f"=== SYNC DEBUG START ===")
         print(f"Sync debug - Platform: {platform.platform_name if platform else 'None'}")
         print(f"Sync debug - User account token: {'Present' if user_account.auth_token else 'Missing'}")
         print(f"Songs to add to platform: {len(songs_to_add_to_platform)}")
+        print(f"Target playlist: {target_playlist.name if target_playlist else 'None'}")
+        print(f"Target playlist platform ID: {target_playlist.platform_playlist_id if target_playlist else 'None'}")
         
         if platform and user_account.auth_token and songs_to_add_to_platform:
             if platform.platform_name == 'YouTube':
-                print("Calling update_youtube_playlist...")
+                print("=== CALLING update_youtube_playlist ===")
                 platform_songs_added = update_youtube_playlist(
                     user_account.auth_token, 
                     target_playlist, 
@@ -1391,13 +1397,19 @@ def sync_playlist_songs():
                 )
                 print(f"YouTube sync result: {platform_songs_added} songs added")
             elif platform.platform_name == 'Spotify':
-                print("Calling update_spotify_playlist...")
+                print("=== CALLING update_spotify_playlist ===")
                 platform_songs_added = update_spotify_playlist(
                     user_account.auth_token, 
                     target_playlist, 
                     songs_to_add_to_platform
                 )
                 print(f"Spotify sync result: {platform_songs_added} songs added")
+        else:
+            print("=== SYNC CONDITIONS NOT MET ===")
+            print(f"Platform exists: {platform is not None}")
+            print(f"User account token exists: {user_account.auth_token is not None}")
+            print(f"Songs to add exists: {len(songs_to_add_to_platform) > 0}")
+        print(f"=== SYNC DEBUG END ===")
         
         # Create sync log - record the TARGET playlist where songs were added
         sync_log = SyncLog(

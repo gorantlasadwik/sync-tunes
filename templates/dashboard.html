@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Sync Tunes{% endblock %}
+
+{% block content %}
+<h1>Welcome, {{ current_user.name }}!</h1>
+
+<!-- Social Links Section -->
+<div class="card" style="background: linear-gradient(135deg, #0077b5, #00a0dc); border: none; margin-bottom: 1rem;">
+    <div class="card-header" style="background: transparent; border: none;">
+        <h3 class="card-title" style="color: white; margin: 0;">Connect with Me</h3>
+    </div>
+    <div style="padding: 1rem; text-align: center;">
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                         <a href="https://www.linkedin.com/in/sadwik-gorantla-042362282/" 
+                target="_blank" 
+                class="btn" 
+                style="background: #0077b5; color: white; border: 2px solid white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 5px; transition: all 0.3s ease;">
+                <i class="fab fa-linkedin"></i> LinkedIn
+            </a>
+            <a href="https://github.com/gorantlasadwik" 
+               target="_blank" 
+               class="btn" 
+               style="background: #333; color: white; border: 2px solid white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 5px; transition: all 0.3s ease;">
+                <i class="fab fa-github"></i> GitHub
+            </a>
+        </div>
+        <p style="color: white; margin: 1rem 0 0 0; font-size: 0.9rem; opacity: 0.9;">
+            Let's connect and collaborate on amazing projects! 🚀
+        </p>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Connected Platforms</h3>
+        </div>
+        
+        {% if user_accounts %}
+            <div class="table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Platform</th>
+                            <th>Username</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for account in user_accounts %}
+                            <tr>
+                                <td>
+                                    {% set platform = account.platform %}
+                                    {{ platform.platform_name if platform else "Unknown Platform" }}
+                                </td>
+                                <td>{{ account.username_on_platform }}</td>
+                                <td>
+                                    {% if account.auth_token %}
+                                        <span style="color: #00ff00;">✓ Connected</span>
+                                    {% else %}
+                                        <span style="color: #ff6666;">✗ Disconnected</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No platforms connected yet.</p>
+        {% endif %}
+        
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('connect_platform') }}" class="btn btn-primary">Connect Platform</a>
+            {% if user_accounts %}
+            <a href="{{ url_for('refresh_playlists') }}" class="btn btn-secondary">🔄 Refresh Playlists</a>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Your Playlists</h3>
+        </div>
+        
+        {% if playlists %}
+            <div class="table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Platform</th>
+                            <th>Account</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for playlist in playlists %}
+                            <tr>
+                                <td>{{ playlist.name }}</td>
+                                <td>{{ playlist.platform_name }}</td>
+                                <td>{{ playlist.account_username }}</td>
+                                <td>
+                                    <div class="d-flex gap-2">
+                                        <a href="{{ url_for('playlist_details', playlist_id=playlist.playlist_id) }}" 
+                                           class="btn btn-info btn-sm">
+                                            <i class="fas fa-eye"></i> View Details
+                                        </a>
+                                        {% if playlist.song_count > 0 %}
+                                        <span class="badge bg-secondary">{{ playlist.song_count }} songs</span>
+                                        {% endif %}
+                                        {% if user_accounts|length > 1 %}
+                                            <a href="{{ url_for('playlist_details', playlist_id=playlist.playlist_id) }}" 
+                                               class="btn btn-primary btn-sm">
+                                                <i class="fas fa-sync"></i> Sync
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No playlists found. Connect your platforms to see your playlists.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if user_accounts|length < 2 %}
+    <div class="card" style="background-color: #004444; border-color: #00aaaa;">
+        <div class="card-header">
+            <h3 class="card-title">Next Steps</h3>
+        </div>
+        <p>To start syncing playlists, you need to connect both Spotify and YouTube accounts.</p>
+        <a href="{{ url_for('connect_platform') }}" class="btn btn-primary">Connect Platform</a>
+    </div>
+{% else %}
+    <div class="card" style="background-color: #004400; border-color: #00aa00;">
+        <div class="card-header">
+            <h3 class="card-title">Ready to Sync!</h3>
+        </div>
+        <p>You have both platforms connected. You can now sync individual playlists or sync all at once.</p>
+                 <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+             <a href="{{ url_for('refresh_playlists') }}" class="btn btn-info">
+                 <i class="fas fa-sync"></i> Refresh Playlists
+             </a>
+             <a href="{{ url_for('logs') }}" class="btn btn-secondary">
+                 <i class="fas fa-history"></i> View Sync Logs
+             </a>
+         </div>
+    </div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Recent Sync Activity</h3>
+    </div>
+    
+    <div class="text-center">
+        <a href="{{ url_for('logs') }}" class="btn btn-secondary">View All Logs</a>
+    </div>
+</div>
+{% endblock %}

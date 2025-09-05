@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Connect Platform - Sync Tunes{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto;">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Connect Platform Account</h2>
+        </div>
+        
+        <p style="margin-bottom: 1.5rem; color: #cccccc;">
+            Click on a platform below to securely connect your account. You'll be redirected to the platform's 
+            official website to authorize Sync Tunes to access your playlists.
+        </p>
+        
+        <!-- Current Connection Status -->
+        <div class="card" style="background-color: #002244; border-color: #0066cc; margin-bottom: 1.5rem;">
+            <div class="card-header">
+                <h4 class="card-title">Current Connection Status</h4>
+            </div>
+            <div class="card-body">
+                {% for platform in platforms %}
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #004466;">
+                        <span style="color: #cccccc;">{{ platform.platform_name }}</span>
+                        {% if platform.is_connected %}
+                            <span style="color: #00ff00;">✓ Connected{% if platform.username %} ({{ platform.username }}){% endif %}</span>
+                        {% else %}
+                            <span style="color: #ff6666;">✗ Not Connected</span>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                
+                {% if user_accounts|length == 0 %}
+                    <div style="text-align: center; padding: 1rem; color: #cccccc;">
+                        <p>No platforms connected yet. Click below to get started!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label for="platform">Select Platform:</label>
+                <select id="platform" name="platform" required>
+                    <option value="">Choose a platform...</option>
+                    {% for platform in platforms %}
+                        <option value="{{ platform.platform_name }}">{{ platform.platform_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Connect Platform</button>
+        </form>
+    </div>
+    
+    <div class="card" style="background-color: #004444; border-color: #00aaaa;">
+        <div class="card-header">
+            <h3 class="card-title">What Happens Next?</h3>
+        </div>
+        
+        <h4>🔐 Secure OAuth Flow:</h4>
+        <ul style="margin-left: 1.5rem; margin-bottom: 1rem;">
+            <li>You'll be redirected to the official platform website</li>
+            <li>Log in with your platform credentials</li>
+            <li>Authorize Sync Tunes to access your playlists</li>
+            <li>You'll be redirected back to Sync Tunes</li>
+            <li>Your playlists will be automatically imported</li>
+        </ul>
+        
+        <h4>📱 Supported Platforms:</h4>
+        <ul style="margin-left: 1.5rem;">
+            <li><strong>Spotify:</strong> Full playlist access with automatic import</li>
+            <li><strong>YouTube:</strong> Secure Google OAuth login for playlist access (regular YouTube playlists)</li>
+        </ul>
+        
+        <div style="background-color: #004400; border: 1px solid #00aa00; padding: 1rem; border-radius: 4px; margin-top: 1rem;">
+            <p style="color: #00ff00; margin: 0;">
+                <strong>🔒 Security Note:</strong> We never see your passwords. All authentication is handled 
+                securely through the official platform APIs using industry-standard OAuth 2.0.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

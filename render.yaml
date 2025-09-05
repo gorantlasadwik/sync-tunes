@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: sync-tunes
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python init_db.py
+    startCommand: gunicorn app:app
+    envVars:
+      - key: SECRET_KEY
+        value: your-super-secret-key-change-this-in-production
+      - key: SPOTIFY_CLIENT_ID
+        value: your_spotify_client_id_here
+      - key: SPOTIFY_CLIENT_SECRET
+        value: your_spotify_client_secret_here
+      - key: YOUTUBE_CLIENT_ID
+        value: your_youtube_client_id_here
+      - key: YOUTUBE_CLIENT_SECRET
+        value: your_youtube_client_secret_here
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: False

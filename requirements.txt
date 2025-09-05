@@ -1,0 +1,14 @@
+Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
+Flask-Login==0.6.3
+Flask-WTF==1.1.1
+WTForms==3.0.1
+requests==2.31.0
+spotipy==2.23.0
+ytmusicapi==0.24.1
+python-dotenv==1.0.0
+bcrypt==4.0.1
+google-auth-oauthlib==1.0.0
+google-auth==2.23.0
+psycopg2-binary==2.9.7
+gunicorn==21.2.0

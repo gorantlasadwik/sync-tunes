@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}{{ playlist.name }} - Playlist Details{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>{{ playlist.name }}</h2>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+            
+            <!-- Playlist Info -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="card-title">Playlist Information</h5>
+                            <p><strong>Platform:</strong> {{ platform.platform_name }}</p>
+                            <p><strong>Account:</strong> {{ playlist.account_username }}</p>
+                            <p><strong>Total Songs:</strong> {{ songs|length }}</p>
+                            <p><strong>Last Updated:</strong> {{ playlist.last_updated.strftime('%Y-%m-%d %H:%M') if playlist.last_updated else 'Unknown' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            {% if playlist.description %}
+                            <h5 class="card-title">Description</h5>
+                            <p>{{ playlist.description }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+                         <!-- Song Sync Form with Songs List -->
+             {% if other_playlists %}
+             <div class="card mb-4">
+                 <div class="card-header">
+                     <h5 class="mb-0">Sync Songs to Another Playlist</h5>
+                 </div>
+                 <div class="card-body">
+                     <form method="POST" action="{{ url_for('sync_playlist_songs') }}" id="syncForm">
+                         <input type="hidden" name="source_playlist_id" value="{{ playlist.playlist_id }}">
+                         
+                         <div class="row mb-3">
+                             <div class="col-md-6">
+                                 <label for="target_playlist_id" class="form-label">Target Playlist:</label>
+                                 <select name="target_playlist_id" id="target_playlist_id" class="form-select" required>
+                                     <option value="">Select a playlist...</option>
+                                     {% for other_playlist in other_playlists %}
+                                     <option value="{{ other_playlist.playlist_id }}">{{ other_playlist.name }}</option>
+                                     {% endfor %}
+                                 </select>
+                             </div>
+                             <div class="col-md-6">
+                                 <label class="form-label">Actions:</label>
+                                 <div class="d-grid gap-2">
+                                     <button type="button" class="btn btn-outline-primary btn-sm" onclick="selectAllSongs()">
+                                         Select All Songs
+                                     </button>
+                                     <button type="button" class="btn btn-outline-secondary btn-sm" onclick="deselectAllSongs()">
+                                         Deselect All
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+                         
+                         <!-- Songs List Inside Form -->
+                         <div class="mb-3">
+                             <h6>Songs in Playlist</h6>
+                             {% if songs %}
+                             <div class="table-responsive">
+                                 <table class="table table-hover">
+                                     <thead>
+                                         <tr>
+                                             <th width="50">
+                                                 <input type="checkbox" id="selectAll" onchange="toggleAllSongs(this)">
+                                             </th>
+                                             <th>Title</th>
+                                             <th>Artist</th>
+                                             <th>Album</th>
+                                             <th>Duration</th>
+                                             <th>Added</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody>
+                                         {% for song in songs %}
+                                         <tr>
+                                             <td>
+                                                 <input type="checkbox" name="song_ids" value="{{ song.song_id }}" 
+                                                        class="song-checkbox form-check-input" onchange="updateSyncButton()">
+                                             </td>
+                                             <td>{{ song.title }}</td>
+                                             <td>{{ song.artist }}</td>
+                                             <td>{{ song.album }}</td>
+                                             <td>
+                                                 {% if song.duration %}
+                                                     {{ (song.duration // 60) }}:{{ '%02d' % (song.duration % 60) }}
+                                                 {% else %}
+                                                     --
+                                                 {% endif %}
+                                             </td>
+                                             <td>{{ song.added_at.strftime('%Y-%m-%d') if song.added_at else '--' }}</td>
+                                         </tr>
+                                         {% endfor %}
+                                     </tbody>
+                                 </table>
+                             </div>
+                             {% else %}
+                             <div class="text-center py-4">
+                                 <p class="text-muted">No songs in this playlist yet.</p>
+                             </div>
+                             {% endif %}
+                         </div>
+                         
+                         <button type="submit" class="btn btn-success" id="syncBtn" disabled>
+                             <i class="fas fa-sync"></i> Sync Selected Songs
+                         </button>
+                     </form>
+                 </div>
+             </div>
+             {% endif %}
+
+             <!-- Songs List (Outside Form for Viewing) -->
+             {% if not other_playlists %}
+             <div class="card">
+                 <div class="card-header">
+                     <h5 class="mb-0">Songs in Playlist</h5>
+                 </div>
+                 <div class="card-body">
+                     {% if songs %}
+                     <div class="table-responsive">
+                         <table class="table table-hover">
+                             <thead>
+                                 <tr>
+                                     <th>Title</th>
+                                     <th>Artist</th>
+                                     <th>Album</th>
+                                     <th>Duration</th>
+                                     <th>Added</th>
+                                 </tr>
+                             </thead>
+                             <tbody>
+                                 {% for song in songs %}
+                                 <tr>
+                                     <td>{{ song.title }}</td>
+                                     <td>{{ song.artist }}</td>
+                                     <td>{{ song.album }}</td>
+                                     <td>
+                                         {% if song.duration %}
+                                             {{ (song.duration // 60) }}:{{ '%02d' % (song.duration % 60) }}
+                                         {% else %}
+                                             --
+                                         {% endif %}
+                                     </td>
+                                     <td>{{ song.added_at.strftime('%Y-%m-%d') if song.added_at else '--' }}</td>
+                                 </tr>
+                                 {% endfor %}
+                             </tbody>
+                         </table>
+                     </div>
+                     {% else %}
+                     <div class="text-center py-4">
+                         <p class="text-muted">No songs in this playlist yet.</p>
+                     </div>
+                     {% endif %}
+                 </div>
+             </div>
+             {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function selectAllSongs() {
+    const checkboxes = document.querySelectorAll('.song-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = true;
+    });
+    updateSyncButton();
+}
+
+function deselectAllSongs() {
+    const checkboxes = document.querySelectorAll('.song-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateSyncButton();
+}
+
+function toggleAllSongs(selectAllCheckbox) {
+    const checkboxes = document.querySelectorAll('.song-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+    });
+    updateSyncButton();
+}
+
+function updateSyncButton() {
+    const selectedSongs = document.querySelectorAll('.song-checkbox:checked');
+    const targetPlaylist = document.getElementById('target_playlist_id');
+    const syncBtn = document.getElementById('syncBtn');
+    
+    if (selectedSongs.length > 0 && targetPlaylist.value) {
+        syncBtn.disabled = false;
+    } else {
+        syncBtn.disabled = true;
+    }
+}
+
+// Update sync button when target playlist changes
+document.getElementById('target_playlist_id').addEventListener('change', updateSyncButton);
+
+// Initial button state
+updateSyncButton();
+</script>
+{% endblock %}

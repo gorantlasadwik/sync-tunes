@@ -1,0 +1,411 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Logs - Sync Tunes{% endblock %}
+
+{% block head %}
+<style>
+.even-row {
+    background-color: #001833;
+}
+.odd-row {
+    background-color: transparent;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 0 auto;">
+    <h1 style="color: #ffffff; text-align: center; margin-bottom: 2rem;">🔄 Sync Logs & History</h1>
+
+    <div class="card" style="background-color: #002244; border-color: #0066cc;">
+        <div class="card-header">
+            <h3 class="card-title">📊 Synchronization History</h3>
+            <p style="color: #cccccc; margin: 0;">Track all your playlist sync operations with detailed information</p>
+            
+            <!-- Log Statistics and Actions -->
+            <div style="margin-top: 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <span style="color: #00aaff; font-weight: bold;">📈 Total Logs: {{ stats.total_logs }}</span>
+                    <span style="color: #00ff00; font-weight: bold;">🎵 Total Songs Synced: {{ stats.total_songs_synced }}</span>
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <a href="{{ url_for('cleanup_logs') }}" 
+                       class="btn btn-warning" 
+                       style="padding: 0.5rem 1rem; font-size: 0.9em; background-color: #ff8800; border: none; border-radius: 4px; color: white; text-decoration: none;"
+                       onclick="return confirm('Are you sure you want to clean up old logs? This action cannot be undone.')">
+                        🗑️ Cleanup Old Logs
+                    </a>
+                    <a href="{{ url_for('dashboard') }}" 
+                       class="btn btn-secondary" 
+                       style="padding: 0.5rem 1rem; font-size: 0.9em; background-color: #666; border: none; border-radius: 4px; color: white; text-decoration: none;">
+                        ← Back to Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        {% if sync_logs %}
+            <div class="table-responsive">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background-color: #003366;">
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #0066cc; color: #ffffff;">📅 Date & Time</th>
+                            {% if current_user|is_admin %}
+                                <th style="padding: 12px; text-align: left; border-bottom: 2px solid #0066cc; color: #ffffff;">👤 User</th>
+                            {% endif %}
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #0066cc; color: #ffffff;">📤 Source</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #0066cc; color: #ffffff;">📥 Destination</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 2px solid #0066cc; color: #ffffff;">🎵 Playlist</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 2px solid #0066cc; color: #ffffff;">🎯 Total</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 2px solid #0066cc; color: #ffffff;">➕ Added</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 2px solid #0066cc; color: #ffffff;">➖ Removed</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 2px solid #0066cc; color: #ffffff;">🔍 Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in sync_logs %}
+                            <tr class="{{ 'even-row' if loop.index % 2 == 0 else 'odd-row' }}" style="border-bottom: 1px solid #004466;">
+                                <td style="padding: 12px; color: #cccccc;">
+                                    <div style="font-weight: bold;">{{ log.timestamp.strftime('%Y-%m-%d') }}</div>
+                                    <div style="font-size: 0.9em; color: #888888;">Sync #{{ log.sync_id }}</div>
+                                </td>
+                                {% if current_user|is_admin %}
+                                    <td style="padding: 12px; color: #cccccc;">
+                                        <span style="color: #00aaff;">{{ log.user.name if log.user else 'Unknown User' }}</span>
+                                    </td>
+                                {% endif %}
+                                <td style="padding: 12px;">
+                                    {% set source_account = log.source_account %}
+                                    {% if source_account and source_account.platform %}
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span style="color: #00ff00;">✓</span>
+                                            <span style="color: #cccccc;">{{ source_account.platform.platform_name }}</span>
+                                        </div>
+                                        {% if source_account.username_on_platform %}
+                                            <div style="font-size: 0.8em; color: #888888;">@{{ source_account.username_on_platform }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <span style="color: #ff6666;">✗ Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 12px;">
+                                    {% set dest_account = log.destination_account %}
+                                    {% if dest_account and dest_account.platform %}
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span style="color: #00ff00;">✓</span>
+                                            <span style="color: #cccccc;">{{ dest_account.platform.platform_name }}</span>
+                                        </div>
+                                        {% if dest_account.username_on_platform %}
+                                            <div style="font-size: 0.8em; color: #888888;">@{{ dest_account.username_on_platform }}</div>
+                                        {% endif %}
+                                    {% else %}
+                                        <span style="color: #ff6666;">✗ Unknown</span>
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 12px; color: #cccccc;">
+                                    <div style="font-weight: bold;">{{ log.playlist.name if log.playlist else 'Unknown' }}</div>
+                                    {% if log.playlist and log.playlist.description %}
+                                        <div style="font-size: 0.8em; color: #888888;">{{ log.playlist.description[:50] }}{% if log.playlist.description|length > 50 %}...{% endif %}</div>
+                                    {% endif %}
+                                </td>
+                                <td style="padding: 12px; text-align: center;">
+                                    <span style="font-size: 1.2em; font-weight: bold; color: #ffffff;">{{ log.total_songs_synced }}</span>
+                                </td>
+                                <td style="padding: 12px; text-align: center;">
+                                    <span style="color: #00ff00; font-weight: bold; font-size: 1.1em;">+{{ log.songs_added }}</span>
+                                </td>
+                                <td style="padding: 12px; text-align: center;">
+                                    <span style="color: #ff4444; font-weight: bold; font-size: 1.1em;">-{{ log.songs_removed }}</span>
+                                </td>
+                                <td style="padding: 12px; text-align: center;">
+                                    <button
+                                        type="button"
+                                        onclick="showSyncDetails('{{ log.sync_id }}')"
+                                        class="btn btn-primary"
+                                        style="padding: 6px 12px; font-size: 0.9em; background-color: #0066cc; border: none; border-radius: 4px; color: white; cursor: pointer;">
+                                        🔍 View Details
+                                    </button>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div style="text-align: center; padding: 3rem; color: #cccccc;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                <h3>No Sync Logs Found</h3>
+                <p>Start syncing your playlists to see detailed history here!</p>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary" style="margin-top: 1rem;">Go to Dashboard</a>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Sync Details Modal -->
+    <div id="syncDetailsModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8);">
+        <div class="modal-content" style="background-color: #002244; margin: 5% auto; padding: 0; border: 2px solid #0066cc; border-radius: 8px; width: 80%; max-width: 800px; max-height: 80%; overflow-y: auto;">
+            <div class="modal-header" style="padding: 20px; border-bottom: 1px solid #0066cc; display: flex; justify-content: space-between; align-items: center;">
+                <h2 id="modalTitle" style="color: #ffffff; margin: 0;">Sync Details</h2>
+                <span class="close" onclick="closeSyncDetails()" style="color: #aaaaaa; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+            </div>
+            <div class="modal-body" id="modalBody" style="padding: 20px;">
+                <!-- Content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    {% if current_user|is_admin %}
+        <div class="card" style="background-color: #004444; border-color: #00aaaa; margin-top: 2rem;">
+            <div class="card-header">
+                <h3 class="card-title">📈 System Statistics</h3>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; padding: 1rem;">
+                <div class="card" style="background-color: #004400; border-color: #00aa00; text-align: center; padding: 1.5rem;">
+                    <h4 style="color: #00ff00; margin: 0 0 1rem 0;">📊 Avg Songs/Sync</h4>
+                    <p style="font-size: 2.5rem; color: #00ff00; margin: 0; font-weight: bold;">{{ stats.avg_songs_per_sync|round(1) }}</p>
+                </div>
+                
+                <div class="card" style="background-color: #004444; border-color: #00aaaa; text-align: center; padding: 1.5rem;">
+                    <h4 style="color: #00ffff; margin: 0 0 1rem 0;">🔄 Total Syncs</h4>
+                    <p style="font-size: 2.5rem; color: #00ffff; margin: 0; font-weight: bold;">{{ sync_logs|length }}</p>
+                </div>
+
+                <div class="card" style="background-color: #440044; border-color: #aa00aa; text-align: center; padding: 1.5rem;">
+                    <h4 style="color: #ff00ff; margin: 0 0 1rem 0;">🎵 Total Songs</h4>
+                    <p style="font-size: 2.5rem; color: #ff00ff; margin: 0; font-weight: bold;">{{ sync_logs|sum(attribute='total_songs_synced') }}</p>
+                </div>
+
+                <div class="card" style="background-color: #444400; border-color: #aaaa00; text-align: center; padding: 1.5rem;">
+                    <h4 style="color: #ffff00; margin: 0 0 1rem 0;">📊 Success Rate</h4>
+                    <p style="font-size: 2.5rem; color: #ffff00; margin: 0; font-weight: bold;">
+                        {% set total_synced = sync_logs|sum(attribute='total_songs_synced') %}
+                        {% set total_added = sync_logs|sum(attribute='songs_added') %}
+                        {% if total_synced > 0 %}
+                            {{ ((total_added / total_synced) * 100)|round(1) }}%
+                        {% else %}
+                            0%
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function showSyncDetails(syncId) {
+    // Show loading state
+    document.getElementById('modalTitle').textContent = 'Loading Sync Details...';
+    document.getElementById('modalBody').innerHTML = '<div style="text-align: center; padding: 2rem; color: #cccccc;"><div style="font-size: 2rem;">⏳</div><p>Loading detailed information...</p></div>';
+    document.getElementById('syncDetailsModal').style.display = 'block';
+    
+    // Fetch sync details
+    fetch(`/sync_details/${syncId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displaySyncDetails(data.sync_data);
+            } else {
+                document.getElementById('modalBody').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: #ff6666;">
+                        <div style="font-size: 2rem;">❌</div>
+                        <h3>Error Loading Details</h3>
+                        <p>${data.error || 'Failed to load sync details'}</p>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            document.getElementById('modalBody').innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: #ff6666;">
+                    <div style="font-size: 2rem;">❌</div>
+                    <h3>Network Error</h3>
+                    <p>Failed to load sync details: ${error.message}</p>
+                </div>
+            `;
+        });
+}
+
+function displaySyncDetails(syncData) {
+    document.getElementById('modalTitle').textContent = `Sync Details - ${syncData.playlist_name}`;
+    
+    const modalBody = document.getElementById('modalBody');
+    modalBody.innerHTML = `
+        <div style="color: #cccccc;">
+            <!-- Sync Overview -->
+            <div style="background-color: #003366; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem;">
+                <h3 style="color: #ffffff; margin: 0 0 1rem 0;">📋 Sync Overview</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5rem; color: #00ff00;">📅</div>
+                        <div style="font-weight: bold;">Date</div>
+                        <div>${syncData.timestamp}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5rem; color: #00aaff;">👤</div>
+                        <div style="font-weight: bold;">User</div>
+                        <div>${syncData.user_name}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5rem; color: #ff00ff;">🎯</div>
+                        <div style="font-weight: bold;">Total Songs</div>
+                        <div>${syncData.total_songs_synced}</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div style="font-size: 1.5rem; color: #00ff00;">➕</div>
+                        <div style="font-weight: bold;">Added</div>
+                        <div>${syncData.songs_added}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Platform Information -->
+            <div style="background-color: #003366; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem;">
+                <h3 style="color: #ffffff; margin: 0 0 1rem 0;">🌐 Platform Details</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                    <div style="border-right: 1px solid #0066cc; padding-right: 1rem;">
+                        <h4 style="color: #00ff00; margin: 0 0 0.5rem 0;">📤 Source Platform</h4>
+                        <div style="margin-bottom: 0.5rem;"><strong>Platform:</strong> ${syncData.source_platform}</div>
+                        <div style="margin-bottom: 0.5rem;"><strong>Username:</strong> ${syncData.source_username || 'N/A'}</div>
+                        <div style="margin-bottom: 0.5rem;"><strong>Playlist:</strong> ${syncData.playlist_name}</div>
+                    </div>
+                    <div>
+                        <h4 style="color: #00aaff; margin: 0 0 0.5rem 0;">📥 Destination Platform</h4>
+                        <div style="margin-bottom: 0.5rem;"><strong>Platform:</strong> ${syncData.destination_platform}</div>
+                        <div style="margin-bottom: 0.5rem;"><strong>Username:</strong> ${syncData.destination_username || 'N/A'}</div>
+                        <div style="margin-bottom: 0.5rem;"><strong>Status:</strong> <span style="color: #00ff00;">✓ Connected</span></div>
+                    </div>
+                </div>
+            </div>
+
+                         <!-- Synced Songs List -->
+             <div style="background-color: #003366; padding: 1rem; border-radius: 6px;">
+                 <h3 style="color: #ffffff; margin: 0 0 1rem 0;">🎵 Synced Songs (${syncData.synced_songs.length})</h3>
+                 <div style="background-color: #004400; padding: 0.8rem; border-radius: 4px; margin-bottom: 1rem; border-left: 4px solid #00ff00;">
+                     <p style="color: #00ff00; margin: 0; font-size: 0.9em;">
+                         <strong>ℹ️ Note:</strong> Due to database limitations, the song details shown below may not represent the exact songs synced in this specific operation. 
+                         They are recent songs from the playlist. The sync count (${syncData.songs_added} songs added) is accurate.
+                     </p>
+                 </div>
+                ${syncData.synced_songs.length > 0 ? `
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background-color: #004466;">
+                                    <th style="padding: 8px; text-align: left; color: #ffffff; border-bottom: 1px solid #0066cc;">#</th>
+                                    <th style="padding: 8px; text-align: left; color: #ffffff; border-bottom: 1px solid #0066cc;">🎵 Title</th>
+                                    <th style="padding: 8px; text-align: left; color: #ffffff; border-bottom: 1px solid #0066cc;">👤 Artist</th>
+                                    <th style="padding: 8px; text-align: left; color: #ffffff; border-bottom: 1px solid #0066cc;">💿 Album</th>
+                                    <th style="padding: 8px; text-align: center; color: #ffffff; border-bottom: 1px solid #0066cc;">⏱️ Duration</th>
+                                    <th style="padding: 8px; text-align: left; color: #ffffff; border-bottom: 1px solid #0066cc;">📝 Note</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${syncData.synced_songs.map((song, index) => `
+                                    <tr style="border-bottom: 1px solid #004466; ${index % 2 === 0 ? 'background-color: #001833;' : ''}">
+                                        <td style="padding: 8px; color: #cccccc; text-align: center;">${index + 1}</td>
+                                        <td style="padding: 8px; color: #ffffff; font-weight: bold;">${song.title}</td>
+                                        <td style="padding: 8px; color: #cccccc;">${song.artist}</td>
+                                        <td style="padding: 8px; color: #888888;">${song.album || 'N/A'}</td>
+                                        <td style="padding: 8px; color: #cccccc; text-align: center;">${formatDuration(song.duration)}</td>
+                                        <td style="padding: 8px; color: #ffaa00; font-size: 0.9em;">${song.note || ''}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : `
+                    <div style="text-align: center; padding: 2rem; color: #888888;">
+                        <div style="font-size: 2rem;">📭</div>
+                        <p>No songs were synced in this operation</p>
+                    </div>
+                `}
+            </div>
+        </div>
+    `;
+}
+
+function formatDuration(seconds) {
+    if (!seconds || seconds === 0) return 'N/A';
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+}
+
+function closeSyncDetails() {
+    document.getElementById('syncDetailsModal').style.display = 'none';
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('syncDetailsModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
+}
+</script>
+
+<style>
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.8);
+}
+
+.modal-content {
+    background-color: #002244;
+    margin: 5% auto;
+    padding: 0;
+    border: 2px solid #0066cc;
+    border-radius: 8px;
+    width: 80%;
+    max-width: 800px;
+    max-height: 80%;
+    overflow-y: auto;
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #0066cc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.close {
+    color: #aaaaaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #ffffff;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        width: 95%;
+        margin: 10% auto;
+    }
+    
+    .table-responsive {
+        font-size: 0.9em;
+    }
+}
+</style>
+{% endblock %}

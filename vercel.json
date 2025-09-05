@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
+    }
+  ],
+  "env": {
+    "SECRET_KEY": "your-super-secret-key-change-this-in-production",
+    "SPOTIFY_CLIENT_ID": "your_spotify_client_id_here",
+    "SPOTIFY_CLIENT_SECRET": "your_spotify_client_secret_here",
+    "YOUTUBE_CLIENT_ID": "your_youtube_client_id_here",
+    "YOUTUBE_CLIENT_SECRET": "your_youtube_client_secret_here",
+    "FLASK_ENV": "production",
+    "FLASK_DEBUG": "False"
+  }
+}

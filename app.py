@@ -45,9 +45,15 @@ SPOTIFY_CLIENT_ID = os.getenv('SPOTIFY_CLIENT_ID')
 SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 
 # Dynamic redirect URI based on environment
-if os.getenv('RAILWAY_ENVIRONMENT'):
+if os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production':
     # Production - use HTTPS
-    base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
+    if os.getenv('RAILWAY_ENVIRONMENT'):
+        base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
+    elif os.getenv('RENDER'):
+        base_url = os.getenv('RENDER_EXTERNAL_URL', 'https://sync-tunes.onrender.com')
+    else:
+        # Fallback for production
+        base_url = 'https://sync-tunes.onrender.com'
     SPOTIFY_REDIRECT_URI = f"{base_url}/spotify_callback"
     YOUTUBE_REDIRECT_URI = f"{base_url}/youtube_callback"
 else:

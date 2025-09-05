@@ -645,14 +645,14 @@ class SyncSong(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    # Try to load admin first (since admin IDs might conflict with user IDs)
-    admin = db.session.get(Admin, int(user_id))
-    if admin:
-        return admin
-    # Then try to load regular user
+    # Try to load regular user first
     user = db.session.get(User, int(user_id))
     if user:
         return user
+    # Then try to load admin
+    admin = db.session.get(Admin, int(user_id))
+    if admin:
+        return admin
     return None
 
 # Routes

@@ -462,7 +462,8 @@ def update_youtube_playlist(access_token, playlist, songs_to_add):
         
         headers = {
             'Authorization': f'Bearer {access_token}',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
         }
         
         youtube_playlist_id = playlist.platform_playlist_id
@@ -484,12 +485,14 @@ def update_youtube_playlist(access_token, playlist, songs_to_add):
                 }
                 
                 search_response = requests.get(search_url, headers=headers, params=search_params)
+                print(f"YouTube search response for '{song_info['title']}': {search_response.status_code}")
                 
                 if search_response.status_code == 200:
                     search_data = search_response.json()
                     
                     if search_data.get('items'):
                         video_id = search_data['items'][0]['id']['videoId']
+                        print(f"Found YouTube video ID: {video_id} for '{song_info['title']}'")
                         
                         # Add video to playlist
                         add_data = {
@@ -504,19 +507,20 @@ def update_youtube_playlist(access_token, playlist, songs_to_add):
                         
                         add_response = requests.post(
                             'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet',
-                            headers={**headers, 'Content-Type': 'application/json'},
+                            headers=headers,
                             data=json.dumps(add_data)
                         )
                         
+                        print(f"YouTube add to playlist response: {add_response.status_code}")
                         if add_response.status_code == 200:
                             songs_added += 1
                             print(f"Added '{song_info['title']}' to YouTube playlist")
                         else:
-                            print(f"Failed to add '{song_info['title']}' to YouTube playlist")
+                            print(f"Failed to add '{song_info['title']}' to YouTube playlist: {add_response.text}")
                     else:
                         print(f"No YouTube video found for: {song_info['title']} by {song_info['artist']}")
                 else:
-                    print(f"YouTube search failed for: {song_info['title']}")
+                    print(f"YouTube search failed for: {song_info['title']} - {search_response.text}")
                     
             except Exception as song_error:
                 print(f"Error adding song '{song_info['title']}' to YouTube: {song_error}")

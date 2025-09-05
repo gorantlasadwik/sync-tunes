@@ -7,15 +7,15 @@ services:
     startCommand: gunicorn app:app
     envVars:
       - key: SECRET_KEY
-        value: your-super-secret-key-change-this-in-production
+        value: sync-tunes-secret-key-2024-secure-random-string
       - key: SPOTIFY_CLIENT_ID
-        value: your_spotify_client_id_here
+        value: 135a8058b3014bc588fdb12c602f1c3a
       - key: SPOTIFY_CLIENT_SECRET
-        value: your_spotify_client_secret_here
+        value: f68044395a4443928e4a278367ee7057
       - key: YOUTUBE_CLIENT_ID
-        value: your_youtube_client_id_here
+        value: 338295193309-ksafb0obnf24oa5eje5mk4jnv5a1msen.apps.googleusercontent.com
       - key: YOUTUBE_CLIENT_SECRET
-        value: your_youtube_client_secret_here
+        value: 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
       - key: FLASK_ENV
         value: production
       - key: FLASK_DEBUG

@@ -813,7 +813,7 @@ def connect_platform():
                 params = {
                     'client_id': YOUTUBE_CLIENT_ID,
                     'redirect_uri': YOUTUBE_REDIRECT_URI,
-                    'scope': 'https://www.googleapis.com/auth/youtube',
+                    'scope': 'https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl',
                     'response_type': 'code',
                     'access_type': 'offline'
                 }

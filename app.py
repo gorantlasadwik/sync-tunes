@@ -895,6 +895,7 @@ def spotify_callback():
         
         token_info = spotify_oauth.get_access_token(code)
         access_token = token_info['access_token']
+        print(f"Spotify access token obtained: {access_token[:20]}...")
         
         # Get user info from Spotify with error handling
         sp = spotipy.Spotify(auth=access_token)

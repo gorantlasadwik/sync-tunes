@@ -460,6 +460,13 @@ def update_youtube_playlist(access_token, playlist, songs_to_add):
     print(f"=== update_youtube_playlist CALLED ===")
     print(f"Playlist: {playlist.name}")
     print(f"Songs to add: {len(songs_to_add)}")
+    
+    # Log to file
+    with open('/tmp/sync_debug.log', 'a') as f:
+        f.write(f"=== update_youtube_playlist CALLED ===\n")
+        f.write(f"Playlist: {playlist.name}\n")
+        f.write(f"Songs to add: {len(songs_to_add)}\n")
+    
     try:
         import requests
         
@@ -1278,6 +1285,19 @@ def playlist_details(playlist_id):
         flash(f'Error loading playlist details: {str(e)}')
         return redirect(url_for('dashboard'))
 
+@app.route('/debug_logs')
+@login_required
+def debug_logs():
+    """View debug logs for troubleshooting"""
+    try:
+        with open('/tmp/sync_debug.log', 'r') as f:
+            logs = f.read()
+        return f"<pre>{logs}</pre>"
+    except FileNotFoundError:
+        return "No debug logs found yet. Try syncing first."
+    except Exception as e:
+        return f"Error reading logs: {str(e)}"
+
 @app.route('/cleanup_logs')
 @login_required
 def cleanup_logs():
@@ -1380,6 +1400,15 @@ def sync_playlist_songs():
         
         # Try to update the real platform playlist
         platform_songs_added = 0
+        # Log to file for better debugging
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"=== SYNC DEBUG START ===\n")
+            f.write(f"Sync debug - Platform: {platform.platform_name if platform else 'None'}\n")
+            f.write(f"Sync debug - User account token: {'Present' if user_account.auth_token else 'Missing'}\n")
+            f.write(f"Songs to add to platform: {len(songs_to_add_to_platform)}\n")
+            f.write(f"Target playlist: {target_playlist.name if target_playlist else 'None'}\n")
+            f.write(f"Target playlist platform ID: {target_playlist.platform_playlist_id if target_playlist else 'None'}\n")
+        
         print(f"=== SYNC DEBUG START ===")
         print(f"Sync debug - Platform: {platform.platform_name if platform else 'None'}")
         print(f"Sync debug - User account token: {'Present' if user_account.auth_token else 'Missing'}")

@@ -59,7 +59,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 if os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production':
     # Production - use HTTPS
     if os.getenv('RAILWAY_ENVIRONMENT'):
-        base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
+    base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
     elif os.getenv('RENDER'):
         base_url = os.getenv('RENDER_EXTERNAL_URL', 'https://sync-tunes.onrender.com')
     else:
@@ -438,6 +438,8 @@ IMPORTANT RULES:
 - Remove "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", "Full Video Songs", etc.
 - For titles with ":" or "||", the part before is usually the song name
 - For titles with "by" or "from", extract the part before these words
+- For titles with " - ", the part AFTER the dash is often the song name
+- Look for patterns like "Movie Name - Song Name" and extract the song name
 - PRESERVE the original song name if it's already clean
 - Don't change song names (e.g., "Telisiney Na Nuvvey" stays "Telisiney Na Nuvvey")
 
@@ -445,6 +447,8 @@ EXAMPLES:
 - "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → "Jeena Jeena"
 - "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui & Sunanda Sharma" → "Baarish Ki Jaaye"
 - "Ae Dil Hai Mushkil Title Track Full Video" → "Ae Dil Hai Mushkil"
+- "Saripodhaa Sanivaaram - Bhaga Bhaga Lyrical | Nani | Priyanka Mohan" → "Bhaga Bhaga"
+- "Movie Name - Song Name | Artist" → "Song Name"
 - "Milne Hai Mujhse Aayi Aashiqui 2 Full Video Song" → "Milne Hai Mujhse Aayi"
 - "The PropheC - To The Stars | Official Video" → "To The Stars"
 
@@ -621,9 +625,11 @@ SEARCH INSTRUCTIONS:
 1. Search for the song using the song name and original YouTube title
 2. Find the real artist/singer (not music directors, channel names, or actors)
 3. Find the album name or movie name
-4. For Indian movies: Look for singers like "Arijit Singh", "Karthik", "Shreya Ghoshal", "Sid Sriram"
-5. Music directors like "DSP", "Devi Sri Prasad", "A.R. Rahman" are NOT the singers
-6. Actor names like "Prabhas", "Kajal Aggarwal" are usually not the singers
+4. For titles like "Movie Name - Song Name", the movie name is the album
+5. Look for patterns like "Movie Name - Song Name | Artist" to identify components
+6. For Indian movies: Look for singers like "Arijit Singh", "Karthik", "Shreya Ghoshal", "Sid Sriram"
+7. Music directors like "DSP", "Devi Sri Prasad", "A.R. Rahman" are NOT the singers
+8. Actor names like "Prabhas", "Kajal Aggarwal" are usually not the singers
 
 Respond in this EXACT JSON format:
 {{
@@ -643,6 +649,7 @@ EXAMPLES:
 - Song: "Jeena Jeena", Title: "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → {{"artist_name": "Atif Aslam", "album_name": "Badlapur", "confidence": 0.95}}
 - Song: "Ae Dil Hai Mushkil", Title: "Ae Dil Hai Mushkil Title Track Full Video" → {{"artist_name": "Arijit Singh", "album_name": "Ae Dil Hai Mushkil", "confidence": 0.9}}
 - Song: "Baarish Ki Jaaye", Title: "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui" → {{"artist_name": "B Praak", "album_name": "Baarish Ki Jaaye", "confidence": 0.85}}
+- Song: "Bhaga Bhaga", Title: "Saripodhaa Sanivaaram - Bhaga Bhaga Lyrical | Nani | Priyanka Mohan" → {{"artist_name": "Sid Sriram", "album_name": "Saripodhaa Sanivaaram", "confidence": 0.9}}
 
 Use web search to find the most accurate information possible.
 """
@@ -974,28 +981,28 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                             print(f"Auto-adding good match: {track['name']}")
                     sp.playlist_add_items(spotify_playlist_id, [track_uri])
                     songs_added += 1
-                    print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                            print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                            
+                            # Log success to file
+                            with open('/tmp/sync_debug.log', 'a') as f:
+                                f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
                     
-                    # Log success to file
-                    with open('/tmp/sync_debug.log', 'a') as f:
-                        f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
-                    
-                    # Store user feedback for learning
-                    if song_info.get('original_title'):
-                        feedback = UserFeedback(
-                            user_id=current_user.user_id,
-                            original_youtube_title=song_info['original_title'],
-                            original_channel=song_info.get('channel_name'),
-                            corrected_song_name=track['name'],
-                            corrected_artist=track['artists'][0]['name'],
-                            corrected_album=track['album']['name'],
-                            spotify_uri=track['uri'],
-                            confidence_score=overall_confidence,
-                            feedback_type='confirmation'
-                        )
-                        db.session.add(feedback)
-                        db.session.commit()
-                    continue
+                        # Store user feedback for learning
+                        if song_info.get('original_title'):
+                            feedback = UserFeedback(
+                                user_id=current_user.user_id,
+                                original_youtube_title=song_info['original_title'],
+                                original_channel=song_info.get('channel_name'),
+                                corrected_song_name=track['name'],
+                                corrected_artist=track['artists'][0]['name'],
+                                corrected_album=track['album']['name'],
+                                spotify_uri=track['uri'],
+                                confidence_score=overall_confidence,
+                                feedback_type='confirmation'
+                            )
+                            db.session.add(feedback)
+                            db.session.commit()
+                        continue
                 else:
                     print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - trying fallback search")
                     # Store poor match for user confirmation
@@ -1020,29 +1027,39 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         session.modified = True
                         print(f"Stored poor match for user confirmation: {track['name']}")
                         # Continue to fallback search
-                    else:
-                        print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
+                else:
+                    print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
-                    # Try fallback search by song name only with better strategies
-                    print(f"Trying fallback search for song name only: '{song_info['title']}'")
+                    # Try fallback search with Gemini re-analysis of full YouTube title
+                    print(f"All strategies failed, asking Gemini to re-analyze full YouTube title...")
                     
+                    # Get the original YouTube title for re-analysis
+                    original_title = song_info.get('original_title', song_info['title'])
+                    channel_name = song_info.get('channel_name', 'Unknown')
+                    
+                    # Ask Gemini to extract the correct song name from the full YouTube title
+                    corrected_song_name, _ = parse_youtube_title_with_gemini(original_title, channel_name)
+                    
+                    print(f"Gemini re-analysis: '{original_title}' -> '{corrected_song_name}'")
+                    
+                    # Now search Spotify with the corrected song name
                     fallback_queries = [
-                        f'track:"{song_info["title"]}"',  # Exact phrase match
-                        f'track:{song_info["title"]}',    # Standard search
-                        f'"{song_info["title"]}"',        # Phrase search
-                        f'{song_info["title"]}',          # Simple search
-                        f'{song_info["title"]} song',     # Add "song" keyword
-                        f'{song_info["title"]} music',    # Add "music" keyword
-                        f'{song_info["title"]} audio',    # Add "audio" keyword
+                        f'track:"{corrected_song_name}"',  # Exact phrase match
+                        f'track:{corrected_song_name}',    # Standard search
+                        f'"{corrected_song_name}"',        # Phrase search
+                        f'{corrected_song_name}',          # Simple search
+                        f'{corrected_song_name} song',     # Add "song" keyword
+                        f'{corrected_song_name} music',    # Add "music" keyword
+                        f'{corrected_song_name} audio',    # Add "audio" keyword
                         # Add language-specific searches
-                        f'{song_info["title"]} bollywood',
-                        f'{song_info["title"]} hindi',
-                        f'{song_info["title"]} telugu',
-                        f'{song_info["title"]} tamil',
-                        f'{song_info["title"]} punjabi',
-                        # Try partial matches
-                        f'{song_info["title"].split()[0]}',  # First word only
-                        f'{song_info["title"].split()[-1]}'  # Last word only
+                        f'{corrected_song_name} bollywood',
+                        f'{corrected_song_name} hindi',
+                        f'{corrected_song_name} telugu',
+                        f'{corrected_song_name} tamil',
+                        f'{corrected_song_name} punjabi',
+                        # Try partial matches with corrected song name
+                        f'{corrected_song_name.split()[0]}' if corrected_song_name.split() else corrected_song_name,  # First word only
+                        f'{corrected_song_name.split()[-1]}' if corrected_song_name.split() else corrected_song_name  # Last word only
                     ]
                     
                     fallback_results = None
@@ -1068,7 +1085,7 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         
                         for track in fallback_results['tracks']['items']:
                             track_name_lower = track['name'].lower()
-                            song_title_lower = song_info['title'].lower()
+                            song_title_lower = corrected_song_name.lower()
                             
                             # Calculate word overlap score
                             song_words = set(song_title_lower.split())
@@ -1096,7 +1113,7 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         fallback_tracks = []
                         for track in fallback_results['tracks']['items']:
                             track_name_lower = track['name'].lower()
-                            song_title_lower = song_info['title'].lower()
+                            song_title_lower = corrected_song_name.lower()
                             
                             # Calculate word overlap score
                             song_words = set(song_title_lower.split())
@@ -1678,7 +1695,7 @@ def spotify_callback():
         # Get user info from Spotify with error handling
         sp = spotipy.Spotify(auth=access_token)
         try:
-            user_info = sp.current_user()
+        user_info = sp.current_user()
             print(f"Spotify callback - user info: {user_info}")
         except Exception as e:
             print(f"Spotify callback error: {e}")
@@ -2322,7 +2339,7 @@ def sync_playlist_songs():
                             })
                     else:
                         # For other sync types, use original song data
-                        songs_to_add_to_platform.append({
+                    songs_to_add_to_platform.append({
                         'title': song.title,
                         'artist': song.artist,
                         'album': song.album,

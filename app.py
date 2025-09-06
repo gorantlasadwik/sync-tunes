@@ -436,10 +436,18 @@ IMPORTANT RULES:
 - Actor names like "Prabhas", "Kajal Aggarwal" are usually not the singers
 - Use web search to verify the correct artist information
 
-SEARCH QUERIES TO USE:
-- Search: "[song name from title] song artist"
-- Search: "[movie name] songs music director"
-- Search: "[song name] official music video"
+SEARCH QUERIES TO USE (in this order):
+1. Search: "[song name] [movie name] singer artist"
+2. Search: "[song name] [movie name] who sang"
+3. Search: "[song name] [movie name] music director"
+4. Search: "[song name] official music video"
+5. Search: "[song name] spotify artist"
+
+VERIFICATION STEPS:
+- Cross-check multiple sources
+- Look for official music videos or Spotify pages
+- Verify the singer's name from reliable music databases
+- If unsure, search for "[song name] [movie name] singer" to find the actual vocalist
 
 Respond in this EXACT JSON format:
 {{
@@ -448,8 +456,8 @@ Respond in this EXACT JSON format:
 }}
 
 EXAMPLES:
-- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → Search for "Badhulu Thochanai song artist" → {{"song_name": "Badhulu Thochanai", "artist_name": "DSP"}}
-- "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → Search for "Kanulanu Thaake Manam song artist" → {{"song_name": "Kanulanu Thaake", "artist_name": "Anirudh"}}
+- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → Search for "Badhulu Thochanai song singer" → {{"song_name": "Badhulu Thochanai", "artist_name": "DSP"}}
+- "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → Search for "Kanulanu Thaake Manam who sang" → {{"song_name": "Kanulanu Thaake", "artist_name": "Arijit Singh"}}
 
 Use web search to find the most accurate information possible.
 """

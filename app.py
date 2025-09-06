@@ -413,43 +413,45 @@ def parse_youtube_title_with_gemini(title, channel_title=None):
         # Create Gemini model
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # Create a detailed prompt for Gemini
+        # Create a web search-enabled prompt for Gemini
         prompt = f"""
-You are a music industry expert with deep knowledge of artists, songs, and music labels. Parse this YouTube video title and extract the most appropriate song name and artist name for music streaming platforms like Spotify.
+You are a music industry expert. I need you to find the ACTUAL song name and artist for this YouTube video title by searching the web for accurate information.
 
 YouTube Title: "{title}"
 Channel Name: "{channel_title or 'Unknown'}"
 
-IMPORTANT RULES:
-1. Extract the CLEAN song name (remove video descriptors like "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", etc.)
-2. Extract the MAIN ARTIST NAME (the actual singer/performer, not channel names, movie names, or music labels)
-3. Channel names like "Mr. Perfect Songs", "Aditya Music", "T-Series" are usually MUSIC LABELS, not artists
-4. Look for the actual singer/performer name in the title
-5. If the title contains movie names, ignore them for the artist field
-6. If multiple artists are mentioned, pick the PRIMARY singer/performer
-7. If no clear artist is found, use the channel name as fallback
-8. Keep song names concise and clean
+TASK: Search the web to find the real song name and artist information for this video.
 
-MUSIC INDUSTRY CONTEXT:
-- "Mr. Perfect Songs" = Music label/channel, not artist
-- "Aditya Music" = Music label, not artist  
-- "T-Series" = Music label, not artist
-- For Indian movie songs: Look for MUSIC DIRECTOR/SINGER names like "DSP", "Devi Sri Prasad", "A.R. Rahman", "Anirudh", etc.
-- Actor names like "Prabhas", "Kajal Aggarwal", "Naga Chaitanya" are usually ACTORS, not singers
-- Music directors like "DSP", "Devi Sri Prasad" are the actual artists for music platforms
-- If you see both actor and music director, prioritize the MUSIC DIRECTOR as the artist
+SEARCH INSTRUCTIONS:
+1. Search for the song using the YouTube title to find official music information
+2. Look for the actual song name (clean, without video descriptors)
+3. Find the real artist/singer/music director (not actors or channel names)
+4. Verify the information from reliable music sources like Spotify, Apple Music, or official music websites
+5. For Indian movie songs, prioritize the music director/singer over actors
+
+IMPORTANT RULES:
+- Extract the CLEAN song name (remove "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", etc.)
+- Find the ACTUAL ARTIST (singer/music director, not channel names or actors)
+- For Indian movies: Look for music directors like "DSP", "Devi Sri Prasad", "A.R. Rahman", "Anirudh"
+- Actor names like "Prabhas", "Kajal Aggarwal" are usually not the singers
+- Use web search to verify the correct artist information
+
+SEARCH QUERIES TO USE:
+- Search: "[song name from title] song artist"
+- Search: "[movie name] songs music director"
+- Search: "[song name] official music video"
 
 Respond in this EXACT JSON format:
 {{
-    "song_name": "Clean Song Name",
-    "artist_name": "Primary Artist Name"
+    "song_name": "Actual Clean Song Name",
+    "artist_name": "Real Artist/Singer Name"
 }}
 
-Examples:
-- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → {{"song_name": "Badhulu Thochanai", "artist_name": "DSP"}}
-- "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → {{"song_name": "Kanulanu Thaake", "artist_name": "Naga Chaitanya"}}
-- "Yenno Yenno : Malli Malli Idi Rani Roju Full Video Songs" → {{"song_name": "Yenno Yenno", "artist_name": "Malli Malli Idi Rani Roju"}}
-- "Song Name (Official Video) - Artist Name" → {{"song_name": "Song Name", "artist_name": "Artist Name"}}
+EXAMPLES:
+- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → Search for "Badhulu Thochanai song artist" → {{"song_name": "Badhulu Thochanai", "artist_name": "DSP"}}
+- "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → Search for "Kanulanu Thaake Manam song artist" → {{"song_name": "Kanulanu Thaake", "artist_name": "Anirudh"}}
+
+Use web search to find the most accurate information possible.
 """
 
         # Get response from Gemini
@@ -1615,6 +1617,7 @@ def sync_playlist_songs():
             user_id=current_user.user_id,
             account_id=target_playlist.account_id
         ).first()
+        
         
         with open('/tmp/sync_debug.log', 'a') as f:
             f.write(f"Target user account found: {target_user_account is not None}\n")

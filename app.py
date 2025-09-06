@@ -3349,7 +3349,7 @@ def sync_playlist_songs():
         sync_log = SyncLog(
             user_id=current_user.user_id,
             source_account_id=user_account.account_id,
-            destination_account_id=user_account.account_id,
+            destination_account_id=target_user_account.account_id,
             playlist_id=target_playlist.playlist_id,  # Changed to target playlist
             total_songs_synced=songs_added,
             songs_added=songs_added,

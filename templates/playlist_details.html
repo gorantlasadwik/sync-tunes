@@ -17,18 +17,12 @@
             <div class="card mb-4">
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <h5 class="card-title">Playlist Information</h5>
                             <p><strong>Platform:</strong> {{ platform.platform_name }}</p>
                             <p><strong>Account:</strong> {{ playlist.account_username }}</p>
                             <p><strong>Total Songs:</strong> {{ songs|length }}</p>
                             <p><strong>Last Updated:</strong> {{ playlist.last_updated.strftime('%Y-%m-%d %H:%M') if playlist.last_updated else 'Unknown' }}</p>
-                        </div>
-                        <div class="col-md-6">
-                            {% if playlist.description %}
-                            <h5 class="card-title">Description</h5>
-                            <p>{{ playlist.description }}</p>
-                            {% endif %}
                         </div>
                     </div>
                 </div>

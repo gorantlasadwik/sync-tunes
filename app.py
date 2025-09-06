@@ -1191,18 +1191,27 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         if 'pending_tracks' not in session:
                             session['pending_tracks'] = []
                         
+                        # Calculate title similarity for user comparison
+                        original_title = song_info.get('original_title', song_info['title'])
+                        spotify_title = track['name']
+                        title_similarity = fuzz.ratio(original_title.lower(), spotify_title.lower())
+                        
                         session['pending_tracks'].append({
-                                'original_song': song_info,
-                                'fallback_tracks': [{
-                                    'name': track['name'],
-                                    'artist': track['artists'][0]['name'],
-                                    'uri': track['uri'],
-                                    'album': track['album']['name'],
-                                    'score': overall_confidence,
-                                    'is_poor_match': True,
-                                    'match_quality': match_quality
-                                }],
-                                'playlist_id': playlist.platform_playlist_id
+                                'song_info': song_info,
+                                'spotify_track': track,
+                                'confidence': overall_confidence,
+                                'search_strategy': 'poor_match',
+                                'fuzzy_scores': {
+                                    'title_simple_ratio': fuzz.ratio(song_info['title'].lower(), track['name'].lower()),
+                                    'title_token_ratio': fuzz.token_set_ratio(song_info['title'].lower(), track['name'].lower()),
+                                    'artist_simple_ratio': fuzz.ratio(song_info.get('artist', '').lower(), track['artists'][0]['name'].lower()) if song_info.get('artist') else 0
+                                },
+                                'title_comparison': {
+                                    'original_youtube_title': original_title,
+                                    'spotify_title': spotify_title,
+                                    'similarity_percentage': title_similarity,
+                                    'is_similar': title_similarity >= 50
+                                }
                             })
                         session.modified = True
                         print(f"Stored poor match for user confirmation: {track['name']}")
@@ -2650,11 +2659,12 @@ def confirm_fallback_tracks():
             flash('No pending tracks to confirm.')
             return redirect(url_for('dashboard'))
         
-        # Validate data structure
+        # Validate data structure (handle both old and new formats)
         for i, track_data in enumerate(pending_tracks):
             print(f"DEBUG: Track {i}: {track_data}")
-            if 'song_info' not in track_data:
-                print(f"ERROR: Track {i} missing 'song_info' key")
+            # Check for new data structure
+            if 'song_info' not in track_data and 'original_song' not in track_data:
+                print(f"ERROR: Track {i} missing both 'song_info' and 'original_song' keys")
                 flash('Error: Invalid track data structure.')
                 return redirect(url_for('dashboard'))
         

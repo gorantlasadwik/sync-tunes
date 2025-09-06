@@ -40,11 +40,13 @@
                                     <i class="fas fa-check"></i> Add This Track
                                 </button>
                             </form>
-                        {% elif track_data.get('fallback_tracks') %}
-                            <p><strong>Fallback Tracks:</strong> {{ track_data['fallback_tracks']|length }} found</p>
-                            {% for fallback_track in track_data['fallback_tracks'] %}
-                                <div class="mb-2">
-                                    <strong>{{ fallback_track.get('name', 'No name') }}</strong> by {{ fallback_track.get('artist', 'Unknown') }}
+                        {% elif track_data.get('fallback_results') %}
+                            <p><strong>Fallback Results:</strong> {{ track_data['fallback_results']|length }} found</p>
+                            {% for fallback_track in track_data['fallback_results'] %}
+                                <div class="mb-2 p-2 border rounded">
+                                    <strong>{{ fallback_track.get('name', 'No name') }}</strong> by {{ fallback_track.get('artists', [{}])[0].get('name', 'Unknown') }}
+                                    <br>
+                                    <small class="text-muted">Album: {{ fallback_track.get('album', {}).get('name', 'Unknown') }}</small>
                                     <form method="POST" action="{{ url_for('confirm_track') }}" class="d-inline">
                                         <input type="hidden" name="track_index" value="{{ track_index }}">
                                         <input type="hidden" name="fallback_index" value="{{ loop.index0 }}">

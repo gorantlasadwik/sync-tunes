@@ -51,6 +51,305 @@ def check_and_reset_gemini_quota():
         GEMINI_QUOTA_RESET_TIME = current_time
         print("⏰ Gemini quota exceeded - will auto-reset in 24 hours")
 
+def regex_preclean_youtube_title(title, channel_title=None):
+    """Step 1: Regex pre-cleaning for YouTube titles - fast and reliable"""
+    if not title:
+        return "Unknown Title", "Unknown Artist"
+    
+    print(f"Step 1 - Regex pre-cleaning: '{title}'")
+    
+    # Remove common video descriptors
+    video_descriptors = [
+        'official video', 'official music video', 'official audio', 'official lyric video',
+        'lyrics', 'lyric video', 'music video', 'mv', 'hd', '4k', 'hq', 'full song',
+        'complete song', 'extended', 'remix', 'cover', 'acoustic', 'live', 'studio version',
+        'with lyrics', 'lyrics video', 'music video', 'mv', 'tribute to', 'song with lyrics',
+        'songs', 'song', 'full video song', 'full video', 'unplugged', 'sped up', 'slowed down'
+    ]
+    
+    # Remove video descriptors (case insensitive)
+    for descriptor in video_descriptors:
+        title = re.sub(rf'\s*-\s*{re.escape(descriptor)}\s*$', '', title, flags=re.IGNORECASE)
+        title = re.sub(rf'\s*\({re.escape(descriptor)}\)', '', title, flags=re.IGNORECASE)
+        title = re.sub(rf'\s*\[{re.escape(descriptor)}\]', '', title, flags=re.IGNORECASE)
+    
+    # Handle specific patterns
+    # Pattern 1: "Artist - Song Name [Official Music Video]"
+    if ' - ' in title and '[' in title:
+        parts = title.split(' - ', 1)
+        if len(parts) == 2:
+            artist_name = parts[0].strip()
+            song_part = parts[1].strip()
+            song_name = re.sub(r'\s*\[.*?\]', '', song_part)
+            print(f"Pattern 1 match: Artist='{artist_name}', Song='{song_name}'")
+            return song_name, artist_name
+    
+    # Pattern 2: "Song Name | Movie Name | Artist | Music Director"
+    if ' | ' in title:
+        parts = [part.strip() for part in title.split(' | ')]
+        if len(parts) >= 3:
+            song_name = parts[0].strip()
+            artist_name = "Unknown Artist"
+            for part in parts[1:]:
+                if not any(word in part.lower() for word in ['movie', 'film', 'video', 'song', 'music', 'director', 'composer']):
+                    if len(part.split()) <= 3:  # Likely a person's name
+                        artist_name = part
+                        break
+            print(f"Pattern 2 match: Song='{song_name}', Artist='{artist_name}'")
+            return song_name, artist_name
+    
+    # Pattern 3: "Artist - Song Name" (simple dash)
+    if ' - ' in title:
+        parts = [part.strip() for part in title.split(' - ', 1)]
+        if len(parts) == 2:
+            artist_name = parts[0].strip()
+            song_name = parts[1].strip()
+            print(f"Pattern 3 match: Artist='{artist_name}', Song='{song_name}'")
+            return song_name, artist_name
+    
+    # Pattern 4: "Song Name by Artist"
+    if ' by ' in title.lower():
+        parts = title.split(' by ', 1)
+        if len(parts) == 2:
+            song_name = parts[0].strip()
+            artist_name = parts[1].strip()
+            print(f"Pattern 4 match: Song='{song_name}', Artist='{artist_name}'")
+            return song_name, artist_name
+    
+    # If no pattern matches, return the cleaned title as song name
+    print(f"No pattern match, using title as song: '{title.strip()}'")
+    return title.strip(), (channel_title or "Unknown Artist")
+
+def hybrid_song_parsing(original_title, channel_title=None, video_id=None):
+    """Hybrid approach: regex pre-clean → Spotify search → ytmusicapi → AI recognition → manual selection"""
+    
+    print(f"=== HYBRID PARSING START ===")
+    print(f"Original title: '{original_title}'")
+    print(f"Channel: '{channel_title or 'Unknown'}'")
+    print(f"Video ID: '{video_id or 'None'}'")
+    
+    # Step 1: Regex pre-cleaning (fastest, most reliable)
+    print(f"\n--- Step 1: Regex Pre-cleaning ---")
+    cleaned_song, cleaned_artist = regex_preclean_youtube_title(original_title, channel_title)
+    print(f"Regex result: Song='{cleaned_song}', Artist='{cleaned_artist}'")
+    
+    # Step 2: Try Spotify search with cleaned title
+    print(f"\n--- Step 2: Spotify Search ---")
+    spotify_result = search_spotify_with_cleaned_title(cleaned_song, cleaned_artist)
+    if spotify_result:
+        print(f"✅ Spotify search successful: {spotify_result['name']} by {spotify_result['artists'][0]['name']}")
+        return {
+            'success': True,
+            'method': 'spotify_search',
+            'song_name': spotify_result['name'],
+            'artist_name': spotify_result['artists'][0]['name'],
+            'album_name': spotify_result['album']['name'],
+            'spotify_track': spotify_result,
+            'confidence': 0.9
+        }
+    
+    # Step 3: Fallback to YouTube Music API
+    print(f"\n--- Step 3: YouTube Music API ---")
+    ytmusic_song, ytmusic_artist, ytmusic_album, ytmusic_confidence = search_youtube_music_for_metadata(original_title, channel_title)
+    if ytmusic_song and ytmusic_confidence >= 0.7:
+        print(f"✅ YouTube Music successful: {ytmusic_song} by {ytmusic_artist}")
+        return {
+            'success': True,
+            'method': 'youtube_music',
+            'song_name': ytmusic_song,
+            'artist_name': ytmusic_artist,
+            'album_name': ytmusic_album,
+            'spotify_track': None,  # Will search Spotify with this info
+            'confidence': ytmusic_confidence
+        }
+    
+    # Step 4: AI Recognition (Gemini + Groq fallback)
+    print(f"\n--- Step 4: AI Recognition ---")
+    ai_result = ai_recognition_fallback(original_title, channel_title, video_id)
+    if ai_result:
+        print(f"✅ AI recognition successful: {ai_result['song_name']} by {ai_result['artist_name']}")
+        return ai_result
+    
+    # Step 5: Manual selection fallback
+    print(f"\n--- Step 5: Manual Selection Required ---")
+    manual_results = get_spotify_fallback_results(cleaned_song, cleaned_artist)
+    return {
+        'success': False,
+        'method': 'manual_selection',
+        'song_name': cleaned_song,
+        'artist_name': cleaned_artist,
+        'album_name': 'Unknown',
+        'spotify_track': None,
+        'confidence': 0.0,
+        'fallback_results': manual_results
+    }
+
+def search_spotify_with_cleaned_title(song_name, artist_name):
+    """Search Spotify with pre-cleaned title and artist"""
+    try:
+        # Initialize Spotify client
+        sp = spotipy.Spotify(auth=session.get('spotify_token'))
+        
+        # Try multiple search strategies
+        search_queries = [
+            f'track:"{song_name}" artist:"{artist_name}"',
+            f'"{song_name}" "{artist_name}"',
+            f'track:"{song_name}"',
+            f'"{song_name}"'
+        ]
+        
+        for query in search_queries:
+            print(f"Trying Spotify search: '{query}'")
+            results = sp.search(q=query, type='track', limit=5)
+            
+            if results['tracks']['items']:
+                # Return the first result (most relevant)
+                track = results['tracks']['items'][0]
+                print(f"Found Spotify track: '{track['name']}' by '{track['artists'][0]['name']}'")
+                return track
+        
+        print("No Spotify results found")
+        return None
+        
+    except Exception as e:
+        print(f"Spotify search error: {e}")
+        return None
+
+def ai_recognition_fallback(original_title, channel_title=None, video_id=None):
+    """AI recognition using Gemini + Groq fallback"""
+    # Try Gemini first
+    if GEMINI_API_KEY and not GEMINI_QUOTA_EXCEEDED:
+        try:
+            check_and_reset_gemini_quota()
+            if not GEMINI_QUOTA_EXCEEDED:
+                # Try URL analysis first (most accurate)
+                if video_id:
+                    song_name, artist_name, album_name, confidence = get_spotify_song_name_from_youtube_url_gemini(video_id, original_title, channel_title)
+                    if song_name and confidence >= 0.6:
+                        return {
+                            'success': True,
+                            'method': 'gemini_url_analysis',
+                            'song_name': song_name,
+                            'artist_name': artist_name,
+                            'album_name': album_name,
+                            'spotify_track': None,
+                            'confidence': confidence
+                        }
+                
+                # Try description analysis
+                if video_id:
+                    song_name, artist_name, album_name, confidence = analyze_youtube_description_gemini(video_id, original_title, channel_title)
+                    if song_name and confidence >= 0.6:
+                        return {
+                            'success': True,
+                            'method': 'gemini_description',
+                            'song_name': song_name,
+                            'artist_name': artist_name,
+                            'album_name': album_name,
+                            'spotify_track': None,
+                            'confidence': confidence
+                        }
+                
+                # Try title parsing
+                song_name, artist_name = parse_youtube_title_with_gemini(original_title, channel_title)
+                if song_name and song_name != "Unknown Title":
+                    return {
+                        'success': True,
+                        'method': 'gemini_title_parsing',
+                        'song_name': song_name,
+                        'artist_name': artist_name,
+                        'album_name': 'Unknown',
+                        'spotify_track': None,
+                        'confidence': 0.7
+                    }
+        except Exception as e:
+            print(f"Gemini AI recognition failed: {e}")
+    
+    # Fallback to Groq
+    if GROQ_API_KEY:
+        try:
+            # Try URL analysis first
+            if video_id:
+                song_name, artist_name, album_name, confidence = get_spotify_song_name_from_youtube_url_groq(video_id, original_title, channel_title)
+                if song_name and confidence >= 0.6:
+                    return {
+                        'success': True,
+                        'method': 'groq_url_analysis',
+                        'song_name': song_name,
+                        'artist_name': artist_name,
+                        'album_name': album_name,
+                        'spotify_track': None,
+                        'confidence': confidence
+                    }
+            
+            # Try description analysis
+            if video_id:
+                song_name, artist_name, album_name, confidence = analyze_youtube_description_groq(video_id, original_title, channel_title)
+                if song_name and confidence >= 0.6:
+                    return {
+                        'success': True,
+                        'method': 'groq_description',
+                        'song_name': song_name,
+                        'artist_name': artist_name,
+                        'album_name': album_name,
+                        'spotify_track': None,
+                        'confidence': confidence
+                    }
+            
+            # Try title parsing
+            song_name, artist_name = parse_youtube_title_with_groq(original_title, channel_title)
+            if song_name and song_name != "Unknown Title":
+                return {
+                    'success': True,
+                    'method': 'groq_title_parsing',
+                    'song_name': song_name,
+                    'artist_name': artist_name,
+                    'album_name': 'Unknown',
+                    'spotify_track': None,
+                    'confidence': 0.7
+                }
+        except Exception as e:
+            print(f"Groq AI recognition failed: {e}")
+    
+    print("All AI recognition methods failed")
+    return None
+
+def get_spotify_fallback_results(song_name, artist_name):
+    """Get Spotify fallback results for manual selection"""
+    try:
+        sp = spotipy.Spotify(auth=session.get('spotify_token'))
+        
+        # Try multiple search strategies
+        search_queries = [
+            f'track:"{song_name}" artist:"{artist_name}"',
+            f'"{song_name}" "{artist_name}"',
+            f'track:"{song_name}"',
+            f'"{song_name}"',
+            f'artist:"{artist_name}"'
+        ]
+        
+        all_results = []
+        for query in search_queries:
+            results = sp.search(q=query, type='track', limit=10)
+            all_results.extend(results['tracks']['items'])
+        
+        # Remove duplicates and return top 5
+        unique_results = []
+        seen_uris = set()
+        for track in all_results:
+            if track['uri'] not in seen_uris:
+                unique_results.append(track)
+                seen_uris.add(track['uri'])
+                if len(unique_results) >= 5:
+                    break
+        
+        print(f"Found {len(unique_results)} fallback results for manual selection")
+        return unique_results
+        
+    except Exception as e:
+        print(f"Spotify fallback search error: {e}")
+        return []
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
 # Database Configuration
@@ -1482,9 +1781,40 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
         
         for song_info in songs_to_add:
             try:
-                print(f"Searching Spotify for: '{song_info['title']}' by '{song_info['artist']}'")
+                print(f"Processing song: '{song_info['title']}' by '{song_info['artist']}' (source: {song_info.get('source', 'unknown')})")
                 
-                # Systematic search approach: Try artist first, then album, then song name only
+                # Check if we already have a Spotify track from hybrid parsing
+                if song_info.get('spotify_track'):
+                    print(f"✅ Using pre-found Spotify track: {song_info['spotify_track']['name']}")
+                    try:
+                        sp.playlist_add_items(playlist.platform_playlist_id, [song_info['spotify_track']['uri']])
+                        songs_added += 1
+                        print(f"Auto-added good match: '{song_info['title']}' -> '{song_info['spotify_track']['name']}'")
+                        continue
+                    except Exception as e:
+                        print(f"Error adding pre-found track: {e}")
+                        # Continue to regular search
+                
+                # Check if manual selection is required
+                if song_info.get('source') == 'manual_selection' and song_info.get('fallback_results'):
+                    print(f"⚠️ Manual selection required for: '{song_info['title']}' by '{song_info['artist']}'")
+                    # Store for manual selection
+                    if 'pending_tracks' not in session:
+                        session['pending_tracks'] = []
+                    
+                    session['pending_tracks'].append({
+                        'song_info': song_info,
+                        'spotify_track': None,
+                        'confidence': 0.0,
+                        'search_strategy': 'manual_selection',
+                        'fuzzy_scores': {},
+                        'fallback_results': song_info.get('fallback_results', [])
+                    })
+                    session.modified = True
+                    print(f"Stored for manual selection: {song_info['title']}")
+                    continue
+                
+                # Regular search approach: Try artist first, then album, then song name only
                 search_strategies = []
                 
                 # Strategy 1: Search with artist name
@@ -2855,7 +3185,7 @@ def sync_playlist_songs():
                     songs_added += 1
                     synced_song_ids.append(song.song_id)  # Track this synced song
                 
-                # If syncing from YouTube to another platform, use Gemini for better parsing
+                # If syncing from YouTube to another platform, use hybrid approach
                 if source_platform.platform_name == 'YouTube' and platform.platform_name != 'YouTube':
                     # Get the original YouTube title from the platform song mapping
                     platform_song = PlatformSong.query.filter_by(
@@ -2864,104 +3194,47 @@ def sync_playlist_songs():
                     ).first()
                     
                     if platform_song:
-                            # Extract the original YouTube title from the album field
-                            original_title = song.album
-                            if original_title.startswith("YouTube_ORIGINAL:"):
-                                original_title = original_title.replace("YouTube_ORIGINAL:", "")
-                                print(f"Found original YouTube title: '{original_title}'")
+                        # Extract the original YouTube title from the album field
+                        original_title = song.album
+                        if original_title.startswith("YouTube_ORIGINAL:"):
+                            original_title = original_title.replace("YouTube_ORIGINAL:", "")
+                            video_id = platform_song.platform_specific_id
+                            print(f"Found original YouTube title: '{original_title}'")
+                            
+                            # Use hybrid parsing approach
+                            hybrid_result = hybrid_song_parsing(original_title, song.artist, video_id)
+                            
+                            if hybrid_result['success']:
+                                # Success - add to platform
+                                print(f"✅ Hybrid parsing successful: {hybrid_result['song_name']} by {hybrid_result['artist_name']} (method: {hybrid_result['method']})")
                                 
-                                # Step 1: Try YouTube Music search first (most accurate)
-                                ytmusic_song_name, ytmusic_artist_name, ytmusic_album_name, ytmusic_confidence = search_youtube_music_for_metadata(
-                                    original_title, song.artist
-                                )
-                                
-                                if ytmusic_song_name and ytmusic_confidence >= 0.7:
-                                    # Use YouTube Music results (high confidence)
-                                    print(f"YouTube Music result: '{ytmusic_song_name}' by '{ytmusic_artist_name}' from '{ytmusic_album_name}' (confidence: {ytmusic_confidence:.2f})")
-                                    
-                                    songs_to_add_to_platform.append({
-                                        'title': ytmusic_song_name,
-                                        'artist': ytmusic_artist_name,
-                                        'album': ytmusic_album_name,
-                                        'original_title': original_title,
-                                        'duration': song.duration,
-                                        'gemini_confidence': ytmusic_confidence,
-                                        'channel_name': song.artist,
-                                        'source': 'youtube_music'
-                                    })
-                                else:
-                                    # Step 2: Try YouTube description analysis
-                                    video_id = platform_song.platform_specific_id
-                                    desc_song_name, desc_artist_name, desc_album_name, desc_confidence = analyze_youtube_description(
-                                        video_id, original_title, song.artist
-                                    )
-                                    
-                                    if desc_song_name and desc_confidence >= 0.7:
-                                        # Use description analysis results (high confidence)
-                                        print(f"YouTube description analysis result: '{desc_song_name}' by '{desc_artist_name}' from '{desc_album_name}' (confidence: {desc_confidence:.2f})")
-                                        
-                                        songs_to_add_to_platform.append({
-                                            'title': desc_song_name,
-                                            'artist': desc_artist_name,
-                                            'album': desc_album_name,
-                                            'original_title': original_title,
-                                            'duration': song.duration,
-                                            'gemini_confidence': desc_confidence,
-                                            'channel_name': song.artist,
-                                            'source': 'youtube_description'
-                                        })
-                                    else:
-                                        # Step 3: Try Gemini with YouTube URL (FINAL FALLBACK)
-                                        print(f"YouTube Music and description analysis failed, trying Gemini with YouTube URL...")
-                                        
-                                        url_song_name, url_artist_name, url_album_name, url_confidence = get_spotify_song_name_from_youtube_url(
-                                            video_id, original_title, song.artist
-                                        )
-                                        
-                                        if url_song_name and url_confidence >= 0.6:
-                                            # Use URL analysis results (good confidence)
-                                            print(f"Gemini URL analysis result: '{url_song_name}' by '{url_artist_name}' from '{url_album_name}' (confidence: {url_confidence:.2f})")
-                                            
-                                            songs_to_add_to_platform.append({
-                                                'title': url_song_name,
-                                                'artist': url_artist_name,
-                                                'album': url_album_name,
-                                                'original_title': original_title,
-                                                'duration': song.duration,
-                                                'gemini_confidence': url_confidence,
-                                                'channel_name': song.artist,
-                                                'source': 'youtube_url_analysis'
-                                            })
-                                        else:
-                                            # Step 4: Fallback to title parsing
-                                            print(f"All advanced methods failed, trying basic title parsing...")
-                                            
-                                            # Extract clean song name using Gemini
-                                            parsed_title, _ = parse_youtube_title_for_sync(original_title, song.artist)
-                                            
-                                            # Get artist and album info using Gemini with confidence
-                                            artist_name, album_name, gemini_confidence = get_artist_and_album_info(parsed_title, original_title, song.artist)
-                                            
-                                            print(f"Gemini title parsing result: '{parsed_title}' by '{artist_name}' from '{album_name}' (confidence: {gemini_confidence:.2f})")
-                                            
-                                            songs_to_add_to_platform.append({
-                                                'title': parsed_title,
-                                                'artist': artist_name,
-                                                'album': album_name,
-                                                'original_title': original_title,
-                                                'duration': song.duration,
-                                                'gemini_confidence': gemini_confidence,
-                                                'channel_name': song.artist,
-                                                'source': 'title_parsing'
-                                            })
-                            else:
-                                # Fallback to stored song data
-                                print(f"No original title found, using stored data: '{song.title}' by '{song.artist}'")
                                 songs_to_add_to_platform.append({
-                                    'title': song.title,
-                                    'artist': song.artist,
-                                    'album': song.album,
-                                    'duration': song.duration
+                                    'title': hybrid_result['song_name'],
+                                    'artist': hybrid_result['artist_name'],
+                                    'album': hybrid_result['album_name'],
+                                    'original_title': original_title,
+                                    'duration': song.duration,
+                                    'gemini_confidence': hybrid_result['confidence'],
+                                    'channel_name': song.artist,
+                                    'source': hybrid_result['method'],
+                                    'spotify_track': hybrid_result.get('spotify_track'),
+                                    'fallback_results': hybrid_result.get('fallback_results', [])
+                                })
+                            else:
+                                # Manual selection required
+                                print(f"⚠️ Manual selection required for: {hybrid_result['song_name']} by {hybrid_result['artist_name']}")
+                                
+                                songs_to_add_to_platform.append({
+                                    'title': hybrid_result['song_name'],
+                                    'artist': hybrid_result['artist_name'],
+                                    'album': hybrid_result['album_name'],
+                                    'original_title': original_title,
+                                    'duration': song.duration,
+                                    'gemini_confidence': 0.0,
+                                    'channel_name': song.artist,
+                                    'source': 'manual_selection',
+                                    'spotify_track': None,
+                                    'fallback_results': hybrid_result.get('fallback_results', [])
                                 })
                         else:
                             # Fallback to original song data
@@ -2972,8 +3245,16 @@ def sync_playlist_songs():
                                 'duration': song.duration
                             })
                     else:
-                        # For other sync types, use original song data
+                        # Fallback to original song data
                         songs_to_add_to_platform.append({
+                            'title': song.title,
+                            'artist': song.artist,
+                            'album': song.album,
+                            'duration': song.duration
+                        })
+                else:
+                    # For other sync types, use original song data
+                    songs_to_add_to_platform.append({
                         'title': song.title,
                         'artist': song.artist,
                         'album': song.album,

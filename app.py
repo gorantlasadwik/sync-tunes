@@ -636,12 +636,26 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     track_name_lower = track['name'].lower()
                     song_title_lower = song_info['title'].lower()
                     
-                    # Check if the track name contains the song title or vice versa
-                    is_good_match = (
+                    # Much stricter validation - require actual word overlap
+                    song_words = set(song_title_lower.split())
+                    track_words = set(track_name_lower.split())
+                    
+                    # Check for meaningful word overlap (at least 50% of song words must be in track)
+                    common_words = song_words.intersection(track_words)
+                    word_overlap_ratio = len(common_words) / len(song_words) if song_words else 0
+                    
+                    # Also check if track name contains song title or vice versa
+                    contains_match = (
                         song_title_lower in track_name_lower or 
-                        track_name_lower in song_title_lower or
-                        abs(len(track_name_lower) - len(song_title_lower)) <= 3  # Allow small differences
+                        track_name_lower in song_title_lower
                     )
+                    
+                    is_good_match = word_overlap_ratio >= 0.5 or contains_match
+                    
+                    print(f"Validation: '{song_title_lower}' vs '{track_name_lower}'")
+                    print(f"Song words: {song_words}, Track words: {track_words}")
+                    print(f"Common words: {common_words}, Overlap ratio: {word_overlap_ratio:.2f}")
+                    print(f"Contains match: {contains_match}, Good match: {is_good_match}")
                     
                     if is_good_match:
                         # Auto-add good matches
@@ -687,27 +701,44 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     if fallback_results['tracks']['items']:
                         print(f"Fallback search found {len(fallback_results['tracks']['items'])} tracks")
                         
-                        # Find the best fallback match
+                        # Find the best fallback match with strict validation
                         best_track = None
+                        best_score = 0
+                        
                         for track in fallback_results['tracks']['items']:
                             track_name_lower = track['name'].lower()
                             song_title_lower = song_info['title'].lower()
                             
-                            # Check if this is a good match
-                            is_good_match = (
+                            # Calculate word overlap score
+                            song_words = set(song_title_lower.split())
+                            track_words = set(track_name_lower.split())
+                            common_words = song_words.intersection(track_words)
+                            word_overlap_ratio = len(common_words) / len(song_words) if song_words else 0
+                            
+                            # Check for contains match
+                            contains_match = (
                                 song_title_lower in track_name_lower or 
-                                track_name_lower in song_title_lower or
-                                abs(len(track_name_lower) - len(song_title_lower)) <= 5  # Allow more differences for fallback
+                                track_name_lower in song_title_lower
                             )
                             
-                            if is_good_match:
+                            # Calculate overall score
+                            score = word_overlap_ratio + (1.0 if contains_match else 0.0)
+                            
+                            print(f"Fallback validation: '{song_title_lower}' vs '{track_name_lower}'")
+                            print(f"Common words: {common_words}, Overlap ratio: {word_overlap_ratio:.2f}, Score: {score:.2f}")
+                            
+                            if score > best_score:
+                                best_score = score
                                 best_track = track
-                                break
                         
-                        # If no good match found, use the first result
-                        if not best_track:
+                        # Only use the best track if it has a reasonable score
+                        if best_track and best_score >= 0.5:
+                            print(f"Using best fallback match with score: {best_score:.2f}")
+                        elif best_track:
+                            print(f"Best fallback match has low score ({best_score:.2f}), using anyway")
+                        else:
                             best_track = fallback_results['tracks']['items'][0]
-                            print(f"No perfect fallback match found, using first result")
+                            print(f"No good fallback match found, using first result")
                         
                         track_uri = best_track['uri']
                         print(f"Auto-adding fallback match: {best_track['name']} by {best_track['artists'][0]['name']}")

@@ -431,7 +431,8 @@ SEARCH INSTRUCTIONS:
 6. For Indian movie songs, prioritize the music director/singer over actors
 
 IMPORTANT RULES:
-- Extract the CLEAN SONG NAME (not album/movie names)
+- PRESERVE the original song name if it's already clean (don't change "Telisiney Na Nuvvey" to "Telisene Nuvve")
+- Only extract song name from complex titles like "Song Name : Movie Name" or "Song Name || Movie Name"
 - Remove "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", "Full Video Songs", etc.
 - For titles like "Song Name : Movie Name", extract ONLY the song name part
 - Find the ACTUAL SINGER/VOCALIST (not music directors, channel names, or actors)
@@ -464,6 +465,7 @@ EXAMPLES:
 - "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → Search for "Badhulu Thochanai who sang singer" → {{"song_name": "Badhulu Thochanai", "artist_name": "Karthik"}}
 - "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → Search for "Kanulanu Thaake Manam who sang" → {{"song_name": "Kanulanu Thaake", "artist_name": "Arijit Singh"}}
 - "Yenno Yenno : Malli Malli Idi Rani Roju Full Video Songs" → Search for "Yenno Yenno who sang singer" → {{"song_name": "Yenno Yenno", "artist_name": "Mohit Chauhan"}}
+- "Telisiney Na Nuvvey" → PRESERVE original name → {{"song_name": "Telisiney Na Nuvvey", "artist_name": "Sid Sriram"}}
 
 Use web search to find the most accurate information possible.
 """
@@ -617,20 +619,31 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     track_uri = track['uri']
                     print(f"Found track: {track['name']} by {track['artists'][0]['name']} - URI: {track_uri}")
                     
-                    # Add track to playlist
-                    spotify_playlist_id = playlist.platform_playlist_id
-                    if not spotify_playlist_id:
-                        print(f"ERROR: No Spotify playlist ID found for playlist '{playlist.name}'")
-                        continue
+                    # Store successful track for user confirmation (instead of auto-adding)
+                    successful_track = {
+                        'name': track['name'],
+                        'artist': track['artists'][0]['name'],
+                        'uri': track_uri,
+                        'album': track['album']['name'],
+                        'is_exact_match': True
+                    }
                     
-                    print(f"Adding track to Spotify playlist: {spotify_playlist_id}")
-                    sp.playlist_add_items(spotify_playlist_id, [track_uri])
-                    songs_added += 1
-                    print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                    # Store in session for user confirmation
+                    if 'pending_tracks' not in session:
+                        session['pending_tracks'] = []
+                    
+                    session['pending_tracks'].append({
+                        'original_song': song_info,
+                        'fallback_tracks': [successful_track],
+                        'playlist_id': playlist.platform_playlist_id
+                    })
+                    session.modified = True
+                    
+                    print(f"Stored successful track for user confirmation: {track['name']}")
                     
                     # Log success to file
                     with open('/tmp/sync_debug.log', 'a') as f:
-                        f.write(f"Successfully added '{song_info['title']}' to Spotify playlist\n")
+                        f.write(f"Found exact match for '{song_info['title']}' - stored for confirmation\n")
                 else:
                     print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
@@ -1852,13 +1865,25 @@ def sync_playlist_songs():
         
         if songs_added > 0:
             if platform_songs_added > 0:
-                flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist.')
+                if pending_tracks:
+                    flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist. {len(pending_tracks)} songs need confirmation.')
+                else:
+                    flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist.')
             else:
-                flash(f'Added {songs_added} songs to database. Platform sync may have failed - check your connection.')
+                if pending_tracks:
+                    flash(f'Added {songs_added} songs to database. {len(pending_tracks)} songs need confirmation. Platform sync may have failed - check your connection.')
+                else:
+                    flash(f'Added {songs_added} songs to database. Platform sync may have failed - check your connection.')
         elif songs_skipped > 0:
-            flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist.')
+            if pending_tracks:
+                flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist. {len(pending_tracks)} songs need confirmation.')
+            else:
+                flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist.')
         else:
-            flash('No songs were selected for syncing.')
+            if pending_tracks:
+                flash(f'No songs were selected for syncing. {len(pending_tracks)} songs need confirmation.')
+            else:
+                flash('No songs were selected for syncing.')
         
         # If there are pending tracks, redirect to confirmation page
         if pending_tracks:

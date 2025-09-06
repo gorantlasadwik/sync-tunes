@@ -1,3 +1,4 @@
+
 {% extends "base.html" %}
 
 {% block title %}Confirm Fallback Tracks{% endblock %}
@@ -29,10 +30,13 @@
                             {% for track in song_data['fallback_tracks'] %}
                             {% set track_index = loop.index0 %}
                             <div class="col-md-6 mb-3">
-                                <div class="card border-primary">
+                                <div class="card {% if track.get('is_exact_match') %}border-success{% else %}border-primary{% endif %}">
                                     <div class="card-body">
-                                        <h6 class="card-title text-primary">
+                                        <h6 class="card-title {% if track.get('is_exact_match') %}text-success{% else %}text-primary{% endif %}">
                                             <i class="fas fa-play-circle"></i> {{ track['name'] }}
+                                            {% if track.get('is_exact_match') %}
+                                                <span class="badge bg-success ms-2">Exact Match</span>
+                                            {% endif %}
                                         </h6>
                                         <p class="card-text">
                                             <strong>Artist:</strong> {{ track['artist'] }}<br>
@@ -41,7 +45,7 @@
                                         <form method="POST" action="{{ url_for('confirm_track') }}" class="d-inline">
                                             <input type="hidden" name="track_index" value="{{ track_index }}">
                                             <input type="hidden" name="song_index" value="{{ song_index }}">
-                                            <button type="submit" class="btn btn-success btn-sm">
+                                            <button type="submit" class="btn {% if track.get('is_exact_match') %}btn-success{% else %}btn-primary{% endif %} btn-sm">
                                                 <i class="fas fa-check"></i> Add This Track
                                             </button>
                                         </form>

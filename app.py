@@ -18,8 +18,10 @@ load_dotenv()
 
 # Configure Gemini API
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_QUOTA_EXCEEDED = False  # Global flag to track quota status
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
+    print(f"✅ Gemini API configured with key: {GEMINI_API_KEY[:10]}...")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
@@ -403,13 +405,19 @@ def create_spotify_playlist_api(access_token, name, description):
         print(f"Error creating Spotify playlist: {e}")
         return None
 
+def reset_gemini_quota():
+    """Reset the Gemini quota flag when a new API key is provided"""
+    global GEMINI_QUOTA_EXCEEDED
+    GEMINI_QUOTA_EXCEEDED = False
+    print("🔄 Gemini quota flag reset - ready to use new API key")
+
 def parse_youtube_title_with_gemini(title, channel_title=None):
     """Parse YouTube video title using Gemini AI for intelligent extraction (for selected songs only)"""
     if not title:
         return "Unknown Title", "Unknown Artist"
     
-    # If Gemini API is not available, fallback to regex parser
-    if not GEMINI_API_KEY:
+    # If Gemini API is not available or quota exceeded, fallback to regex parser
+    if not GEMINI_API_KEY or GEMINI_QUOTA_EXCEEDED:
         return parse_youtube_title_fallback(title, channel_title)
     
     try:
@@ -444,7 +452,19 @@ Respond with ONLY the clean song name, nothing else.
 """
 
         # Get response from Gemini
-        response = model.generate_content(prompt)
+        try:
+            response = model.generate_content(prompt)
+        except Exception as e:
+            if "quota" in str(e).lower() or "429" in str(e):
+                print(f"Gemini API quota exceeded for title parsing: {e}")
+                global GEMINI_QUOTA_EXCEEDED
+                GEMINI_QUOTA_EXCEEDED = True
+                # Fallback to simple title cleaning
+                return clean_title_for_search(title), None
+            else:
+                print(f"Gemini API error for title parsing: {e}")
+                # Fallback to simple title cleaning
+                return clean_title_for_search(title), None
         
         # Parse the response (just song name)
         try:
@@ -477,7 +497,7 @@ def parse_youtube_title_for_sync(title, channel_title=None):
 
 def analyze_youtube_description(video_id, original_title, channel_title=None):
     """Analyze YouTube video description to extract correct song information"""
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY or GEMINI_QUOTA_EXCEEDED:
         return None, None, None, 0.0
     
     try:
@@ -547,7 +567,15 @@ EXAMPLES:
 Use the description to find the most accurate information possible.
 """
         
-        response = model.generate_content(prompt)
+        try:
+            response = model.generate_content(prompt)
+        except Exception as e:
+            if "quota" in str(e).lower() or "429" in str(e):
+                print(f"Gemini API quota exceeded for description analysis: {e}")
+                return None, None, None, 0.0
+            else:
+                print(f"Gemini API error for description analysis: {e}")
+                return None, None, None, 0.0
         
         # Parse the JSON response
         try:
@@ -576,7 +604,7 @@ Use the description to find the most accurate information possible.
 
 def get_artist_and_album_info(song_name, original_title, channel_title=None):
     """Get artist and album information using Gemini AI with confidence scoring"""
-    if not GEMINI_API_KEY:
+    if not GEMINI_API_KEY or GEMINI_QUOTA_EXCEEDED:
         return None, None, 0.0
     
     try:
@@ -621,7 +649,15 @@ EXAMPLES:
 Use web search to find the most accurate information possible.
 """
         
-        response = model.generate_content(prompt)
+        try:
+            response = model.generate_content(prompt)
+        except Exception as e:
+            if "quota" in str(e).lower() or "429" in str(e):
+                print(f"Gemini API quota exceeded for artist/album search: {e}")
+                return None, None, 0.0
+            else:
+                print(f"Gemini API error for artist/album search: {e}")
+                return None, None, 0.0
         
         # Parse the JSON response
         try:

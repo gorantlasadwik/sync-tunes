@@ -55,7 +55,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 if os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production':
     # Production - use HTTPS
     if os.getenv('RAILWAY_ENVIRONMENT'):
-        base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
+    base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
     elif os.getenv('RENDER'):
         base_url = os.getenv('RENDER_EXTERNAL_URL', 'https://sync-tunes.onrender.com')
     else:
@@ -658,7 +658,9 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                             f'track:"{song_info["title"]}" album:"{song_info["album"]}"',
                             f'track:{song_info["title"]} album:{song_info["album"]}',
                             f'"{song_info["title"]}" "{song_info["album"]}"',
-                            f'{song_info["title"]} {song_info["album"]}'
+                            f'{song_info["title"]} {song_info["album"]}',
+                            f'"{song_info["album"]}" "{song_info["title"]}"',  # Album first
+                            f'{song_info["album"]} {song_info["title"]}'  # Album first
                         ]
                     })
                 
@@ -736,8 +738,8 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         spotify_playlist_id = playlist.platform_playlist_id
                         if spotify_playlist_id:
                             print(f"Auto-adding good match: {track['name']}")
-                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
-                            songs_added += 1
+                    sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                    songs_added += 1
                             print(f"Successfully added '{song_info['title']}' to Spotify playlist")
                             
                             # Log success to file
@@ -860,6 +862,7 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                             session.modified = True
                             
                             print(f"Stored {len(fallback_tracks)} meaningful fallback tracks for user confirmation")
+                            print(f"Total pending tracks in session: {len(session['pending_tracks'])}")
                             
                             # Log fallback results to file
                             with open('/tmp/sync_debug.log', 'a') as f:
@@ -1352,7 +1355,7 @@ def spotify_callback():
         # Get user info from Spotify with error handling
         sp = spotipy.Spotify(auth=access_token)
         try:
-            user_info = sp.current_user()
+        user_info = sp.current_user()
             print(f"Spotify callback - user info: {user_info}")
         except Exception as e:
             print(f"Spotify callback error: {e}")
@@ -1969,12 +1972,12 @@ def sync_playlist_songs():
                             })
                     else:
                         # For other sync types, use original song data
-                        songs_to_add_to_platform.append({
-                            'title': song.title,
-                            'artist': song.artist,
-                            'album': song.album,
-                            'duration': song.duration
-                        })
+                    songs_to_add_to_platform.append({
+                        'title': song.title,
+                        'artist': song.artist,
+                        'album': song.album,
+                        'duration': song.duration
+                    })
                 else:
                     songs_skipped += 1
         
@@ -2055,6 +2058,8 @@ def sync_playlist_songs():
         # User feedback
         # Check if there are pending tracks for user confirmation
         pending_tracks = session.get('pending_tracks', [])
+        print(f"=== SYNC DEBUG END ===")
+        print(f"Pending tracks in session: {len(pending_tracks)}")
         
         if songs_added > 0:
             if platform_songs_added > 0:
@@ -2068,6 +2073,7 @@ def sync_playlist_songs():
         
         # If there are pending tracks (songs not found), redirect to confirmation page
         if pending_tracks:
+            print(f"Redirecting to confirmation page with {len(pending_tracks)} pending tracks")
             flash(f'Found {len(pending_tracks)} songs that could not be found on Spotify. Please review and select alternative tracks.')
             return redirect(url_for('confirm_fallback_tracks'))
         

@@ -434,7 +434,10 @@ MUSIC INDUSTRY CONTEXT:
 - "Mr. Perfect Songs" = Music label/channel, not artist
 - "Aditya Music" = Music label, not artist  
 - "T-Series" = Music label, not artist
-- Look for actual singer names like "Prabhas", "Kajal Aggarwal", "DSP", etc.
+- For Indian movie songs: Look for MUSIC DIRECTOR/SINGER names like "DSP", "Devi Sri Prasad", "A.R. Rahman", "Anirudh", etc.
+- Actor names like "Prabhas", "Kajal Aggarwal", "Naga Chaitanya" are usually ACTORS, not singers
+- Music directors like "DSP", "Devi Sri Prasad" are the actual artists for music platforms
+- If you see both actor and music director, prioritize the MUSIC DIRECTOR as the artist
 
 Respond in this EXACT JSON format:
 {{
@@ -443,7 +446,7 @@ Respond in this EXACT JSON format:
 }}
 
 Examples:
-- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → {{"song_name": "Badhulu Thochanai", "artist_name": "Prabhas"}}
+- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → {{"song_name": "Badhulu Thochanai", "artist_name": "DSP"}}
 - "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → {{"song_name": "Kanulanu Thaake", "artist_name": "Naga Chaitanya"}}
 - "Yenno Yenno : Malli Malli Idi Rani Roju Full Video Songs" → {{"song_name": "Yenno Yenno", "artist_name": "Malli Malli Idi Rani Roju"}}
 - "Song Name (Official Video) - Artist Name" → {{"song_name": "Song Name", "artist_name": "Artist Name"}}

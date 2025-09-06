@@ -607,45 +607,110 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
             try:
                 print(f"Searching Spotify for: '{song_info['title']}' by '{song_info['artist']}'")
                 
-                # Search for the song on Spotify
-                search_query = f"track:{song_info['title']} artist:{song_info['artist']}"
-                print(f"Search query: {search_query}")
+                # Search for the song on Spotify with multiple strategies
+                search_queries = [
+                    f'track:"{song_info["title"]}" artist:"{song_info["artist"]}"',  # Exact phrase match
+                    f'track:{song_info["title"]} artist:{song_info["artist"]}',      # Standard search
+                    f'"{song_info["title"]}" "{song_info["artist"]}"',              # Phrase search
+                    f'{song_info["title"]} {song_info["artist"]}'                   # Simple search
+                ]
                 
-                results = sp.search(q=search_query, type='track', limit=1)
-                print(f"Search results: {len(results['tracks']['items'])} tracks found")
+                results = None
+                used_query = None
+                
+                for query in search_queries:
+                    print(f"Trying search query: {query}")
+                    results = sp.search(q=query, type='track', limit=1)
+                    if results['tracks']['items']:
+                        used_query = query
+                        break
+                
+                print(f"Search results: {len(results['tracks']['items'])} tracks found using query: {used_query}")
                 
                 if results['tracks']['items']:
                     track = results['tracks']['items'][0]
                     track_uri = track['uri']
                     print(f"Found track: {track['name']} by {track['artists'][0]['name']} - URI: {track_uri}")
                     
-                    # Auto-add exact matches (no confirmation needed)
-                    spotify_playlist_id = playlist.platform_playlist_id
-                    if spotify_playlist_id:
-                        print(f"Auto-adding exact match: {track['name']}")
-                        sp.playlist_add_items(spotify_playlist_id, [track_uri])
-                        songs_added += 1
-                        print(f"Successfully added '{song_info['title']}' to Spotify playlist")
-                        
-                        # Log success to file
-                        with open('/tmp/sync_debug.log', 'a') as f:
-                            f.write(f"Auto-added exact match: '{song_info['title']}' -> '{track['name']}'\n")
-                    continue
+                    # Validate that the found track is actually the song we're looking for
+                    track_name_lower = track['name'].lower()
+                    song_title_lower = song_info['title'].lower()
+                    
+                    # Check if the track name contains the song title or vice versa
+                    is_good_match = (
+                        song_title_lower in track_name_lower or 
+                        track_name_lower in song_title_lower or
+                        abs(len(track_name_lower) - len(song_title_lower)) <= 3  # Allow small differences
+                    )
+                    
+                    if is_good_match:
+                        # Auto-add good matches
+                        spotify_playlist_id = playlist.platform_playlist_id
+                        if spotify_playlist_id:
+                            print(f"Auto-adding good match: {track['name']}")
+                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                            songs_added += 1
+                            print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                            
+                            # Log success to file
+                            with open('/tmp/sync_debug.log', 'a') as f:
+                                f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
+                        continue
+                    else:
+                        print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - trying fallback search")
+                        # Fall through to fallback search
                 else:
                     print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
-                    # Try fallback search by song name only
+                    # Try fallback search by song name only with better strategies
                     print(f"Trying fallback search for song name only: '{song_info['title']}'")
-                    fallback_query = f"track:{song_info['title']}"
-                    fallback_results = sp.search(q=fallback_query, type='track', limit=5)
+                    
+                    fallback_queries = [
+                        f'track:"{song_info["title"]}"',  # Exact phrase match
+                        f'track:{song_info["title"]}',    # Standard search
+                        f'"{song_info["title"]}"',        # Phrase search
+                        f'{song_info["title"]}'           # Simple search
+                    ]
+                    
+                    fallback_results = None
+                    used_fallback_query = None
+                    
+                    for query in fallback_queries:
+                        print(f"Trying fallback query: {query}")
+                        fallback_results = sp.search(q=query, type='track', limit=5)
+                        if fallback_results['tracks']['items']:
+                            used_fallback_query = query
+                            break
+                    
+                    print(f"Fallback search results: {len(fallback_results['tracks']['items'])} tracks found using query: {used_fallback_query}")
                     
                     if fallback_results['tracks']['items']:
                         print(f"Fallback search found {len(fallback_results['tracks']['items'])} tracks")
                         
-                        # Auto-add the first fallback result (no confirmation needed)
-                        first_track = fallback_results['tracks']['items'][0]
-                        track_uri = first_track['uri']
-                        print(f"Auto-adding fallback match: {first_track['name']} by {first_track['artists'][0]['name']}")
+                        # Find the best fallback match
+                        best_track = None
+                        for track in fallback_results['tracks']['items']:
+                            track_name_lower = track['name'].lower()
+                            song_title_lower = song_info['title'].lower()
+                            
+                            # Check if this is a good match
+                            is_good_match = (
+                                song_title_lower in track_name_lower or 
+                                track_name_lower in song_title_lower or
+                                abs(len(track_name_lower) - len(song_title_lower)) <= 5  # Allow more differences for fallback
+                            )
+                            
+                            if is_good_match:
+                                best_track = track
+                                break
+                        
+                        # If no good match found, use the first result
+                        if not best_track:
+                            best_track = fallback_results['tracks']['items'][0]
+                            print(f"No perfect fallback match found, using first result")
+                        
+                        track_uri = best_track['uri']
+                        print(f"Auto-adding fallback match: {best_track['name']} by {best_track['artists'][0]['name']}")
                         
                         spotify_playlist_id = playlist.platform_playlist_id
                         if spotify_playlist_id:
@@ -655,7 +720,7 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                             
                             # Log success to file
                             with open('/tmp/sync_debug.log', 'a') as f:
-                                f.write(f"Auto-added fallback match: '{song_info['title']}' -> '{first_track['name']}' by {first_track['artists'][0]['name']}\n")
+                                f.write(f"Auto-added fallback match: '{song_info['title']}' -> '{best_track['name']}' by {best_track['artists'][0]['name']}\n")
                     else:
                         print(f"No tracks found even with fallback search for: {song_info['title']}")
                         

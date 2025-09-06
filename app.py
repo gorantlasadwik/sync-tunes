@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+import re
 from datetime import datetime, timedelta
 import json
 import spotipy
@@ -302,16 +303,30 @@ def fetch_youtube_playlists(user_id, access_token):
                             snippet = item['snippet']
                             video_id = snippet['resourceId']['videoId']
                             
+                            # Parse YouTube title to extract clean song name and artist
+                            raw_title = snippet.get('title', 'Unknown Title')
+                            channel_title = snippet.get('videoOwnerChannelTitle', 'Unknown Artist')
+                            
+                            # Use the parser to extract clean song name and artist
+                            parsed_song_name, parsed_artist = parse_youtube_title(raw_title)
+                            
+                            # If parsing didn't work well, fallback to channel title as artist
+                            if parsed_artist == "Unknown Artist" and channel_title != "Unknown Artist":
+                                parsed_artist = channel_title
+                            
+                            # Log the parsing for debugging
+                            print(f"YouTube title parsing: '{raw_title}' -> Song: '{parsed_song_name}', Artist: '{parsed_artist}'")
+                            
                             # Create or get song
                             song = Song.query.filter_by(
-                                title=snippet.get('title', 'Unknown Title'),
-                                artist=snippet.get('videoOwnerChannelTitle', 'Unknown Artist')
+                                title=parsed_song_name,
+                                artist=parsed_artist
                             ).first()
                             
                             if not song:
                                 song = Song(
-                                    title=snippet.get('title', 'Unknown Title'),
-                                    artist=snippet.get('videoOwnerChannelTitle', 'Unknown Artist'),
+                                    title=parsed_song_name,
+                                    artist=parsed_artist,
                                     album='YouTube',
                                     duration=0
                                 )
@@ -379,6 +394,90 @@ def create_spotify_playlist_api(access_token, name, description):
     except Exception as e:
         print(f"Error creating Spotify playlist: {e}")
         return None
+
+def parse_youtube_title(title):
+    """Parse YouTube video title to extract clean song name and artist"""
+    if not title:
+        return "Unknown Title", "Unknown Artist"
+    
+    # Common patterns in YouTube music video titles
+    # Pattern 1: "Song Name - Artist Name - Movie/Album Name"
+    # Pattern 2: "Song Name | Artist Name | Movie Name"
+    # Pattern 3: "Song Name (Official Video) - Artist Name"
+    # Pattern 4: "Song Name - Artist Name [Lyrics]"
+    # Pattern 5: "Song Name - Artist Name - Lyrics Video"
+    
+    # Remove common suffixes/prefixes
+    title = title.strip()
+    
+    # Remove common video descriptors
+    video_descriptors = [
+        'official video', 'official music video', 'lyrics video', 'lyrics',
+        '4k', 'hd', 'hq', 'full song', 'complete song', 'extended',
+        'remix', 'cover', 'acoustic', 'live', 'studio version',
+        'with lyrics', 'lyrics video', 'music video', 'mv',
+        'tribute to', 'song with lyrics', 'songs', 'song'
+    ]
+    
+    # Remove video descriptors (case insensitive)
+    for descriptor in video_descriptors:
+        # Remove at the end
+        title = re.sub(rf'\s*-\s*{re.escape(descriptor)}\s*$', '', title, flags=re.IGNORECASE)
+        # Remove in parentheses
+        title = re.sub(rf'\s*\({re.escape(descriptor)}\)', '', title, flags=re.IGNORECASE)
+        # Remove in brackets
+        title = re.sub(rf'\s*\[{re.escape(descriptor)}\]', '', title, flags=re.IGNORECASE)
+    
+    # Split by common separators
+    separators = [' - ', ' | ', ' – ', ' — ']
+    
+    for sep in separators:
+        if sep in title:
+            parts = [part.strip() for part in title.split(sep)]
+            if len(parts) >= 2:
+                # First part is usually the song name
+                song_name = parts[0]
+                # Second part is usually the artist
+                artist_name = parts[1]
+                
+                # Clean up the song name
+                song_name = re.sub(r'\s+', ' ', song_name).strip()
+                # Clean up the artist name
+                artist_name = re.sub(r'\s+', ' ', artist_name).strip()
+                
+                # If artist name is too long, it might be a movie name, try to extract artist
+                if len(artist_name) > 50:
+                    # Look for common artist patterns
+                    artist_patterns = [
+                        r'^([^,]+)',  # Everything before first comma
+                        r'^([^-]+)',  # Everything before first dash
+                        r'^([^|]+)',  # Everything before first pipe
+                    ]
+                    
+                    for pattern in artist_patterns:
+                        match = re.match(pattern, artist_name)
+                        if match:
+                            artist_name = match.group(1).strip()
+                            break
+                
+                return song_name, artist_name
+    
+    # If no separators found, try to extract from the title
+    # Look for patterns like "Song Name (Artist Name)" or "Song Name [Artist Name]"
+    parenthetical_match = re.match(r'^([^(]+)\s*\(([^)]+)\)', title)
+    if parenthetical_match:
+        song_name = parenthetical_match.group(1).strip()
+        artist_name = parenthetical_match.group(2).strip()
+        return song_name, artist_name
+    
+    bracket_match = re.match(r'^([^[]+)\s*\[([^\]]+)\]', title)
+    if bracket_match:
+        song_name = bracket_match.group(1).strip()
+        artist_name = bracket_match.group(2).strip()
+        return song_name, artist_name
+    
+    # If all else fails, use the whole title as song name
+    return title, "Unknown Artist"
 
 def create_youtube_playlist_api(access_token, title, description):
     """Create a new YouTube playlist"""

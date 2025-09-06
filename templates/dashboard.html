@@ -46,85 +46,119 @@
     </div>
 </div>
 
-<div class="grid">
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">Connected Platforms</h3>
-        </div>
-        
-        {% if user_accounts %}
-            <div class="table">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Platform</th>
-                            <th>Username</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for account in user_accounts %}
-                            <tr>
-                                <td>
-                                    {% set platform = account.platform %}
-                                    {{ platform.platform_name if platform else "Unknown Platform" }}
-                                </td>
-                                <td>{{ account.username_on_platform }}</td>
-                                <td>
-                                    {% if account.auth_token %}
-                                        <span style="color: #00ff00;">✓ Connected</span>
-                                    {% else %}
-                                        <span style="color: #ff6666;">✗ Disconnected</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+<!-- Section 1: Platform Connect (2 divided parts) -->
+<div class="row mb-4">
+    <!-- Part 1: Connected Platforms -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3 class="card-title">Connected Platforms</h3>
             </div>
-        {% else %}
-            <p>No platforms connected yet.</p>
-        {% endif %}
-        
-        <div class="d-flex gap-2">
-            <a href="{{ url_for('connect_platform') }}" class="btn btn-primary">Connect Platform</a>
-            {% if user_accounts %}
-            <a href="{{ url_for('refresh_playlists') }}" class="btn btn-secondary">🔄 Refresh Playlists</a>
-            {% endif %}
-        </div>
-    </div>
-    
-    <!-- Sync Information -->
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">ℹ️ How Sync Works</h3>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <h6 class="text-success">✅ Auto-Added Songs</h6>
-                    <ul class="small text-muted">
-                        <li>Exact artist matches</li>
-                        <li>Fallback search results</li>
-                        <li>No confirmation needed</li>
-                    </ul>
-                </div>
-                <div class="col-md-6">
-                    <h6 class="text-warning">⚠️ Manual Confirmation</h6>
-                    <ul class="small text-muted">
-                        <li>Songs not found on Spotify</li>
-                        <li>Alternative track suggestions</li>
-                        <li>User selects correct match</li>
-                    </ul>
-                </div>
+            <div class="card-body">
+                {% if user_accounts %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Platform</th>
+                                    <th>Username</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for account in user_accounts %}
+                                    <tr>
+                                        <td>
+                                            {% set platform = account.platform %}
+                                            {{ platform.platform_name if platform else "Unknown Platform" }}
+                                        </td>
+                                        <td>{{ account.username_on_platform }}</td>
+                                        <td>
+                                            {% if account.auth_token %}
+                                                <span class="badge bg-success">✓ Connected</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">✗ Disconnected</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No platforms connected yet.</p>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('connect_platform') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus"></i> Connect Platform
+                </a>
             </div>
         </div>
     </div>
     
-    <div class="card">
-        <div class="card-header">
-            <h3 class="card-title">Your Playlists</h3>
+    <!-- Part 2: Platform Actions -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3 class="card-title">Platform Actions</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if user_accounts %}
+                        <a href="{{ url_for('refresh_playlists') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-sync"></i> Refresh Playlists
+                        </a>
+                        <a href="{{ url_for('logs') }}" class="btn btn-outline-info">
+                            <i class="fas fa-history"></i> View Sync History
+                        </a>
+                    {% else %}
+                        <p class="text-muted">Connect a platform to access actions.</p>
+                    {% endif %}
+                </div>
+            </div>
         </div>
+    </div>
+</div>
+
+<!-- Section 2: Sync Information Note -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h3 class="card-title">ℹ️ How Sync Works</h3>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="text-success">✅ Auto-Added Songs</h6>
+                <ul class="small text-muted">
+                    <li>Exact artist matches</li>
+                    <li>High confidence AI matches</li>
+                    <li>No confirmation needed</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-warning">⚠️ Manual Confirmation</h6>
+                <ul class="small text-muted">
+                    <li>Songs not found on Spotify</li>
+                    <li>Alternative track suggestions</li>
+                    <li>User selects correct match</li>
+                </ul>
+            </div>
+        </div>
+        <div class="mt-3">
+            <small class="text-info">
+                <i class="fas fa-info-circle"></i> 
+                Our hybrid approach uses regex pre-cleaning → Spotify search → YouTube Music API → AI recognition → manual selection for optimal accuracy.
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Section 3: All Playlists -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Your Playlists</h3>
+    </div>
         
         {% if playlists %}
             <div class="table">

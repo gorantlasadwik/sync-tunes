@@ -73,6 +73,7 @@ else:
 # YouTube OAuth Configuration
 YOUTUBE_CLIENT_ID = os.getenv('YOUTUBE_CLIENT_ID')
 YOUTUBE_CLIENT_SECRET = os.getenv('YOUTUBE_CLIENT_SECRET')
+YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -474,6 +475,105 @@ def parse_youtube_title_for_sync(title, channel_title=None):
     """Parse YouTube video title using Gemini AI for selected songs during sync"""
     return parse_youtube_title_with_gemini(title, channel_title)
 
+def analyze_youtube_description(video_id, original_title, channel_title=None):
+    """Analyze YouTube video description to extract correct song information"""
+    if not GEMINI_API_KEY:
+        return None, None, None, 0.0
+    
+    try:
+        import requests
+        
+        # Get video description from YouTube API using API key
+        video_url = f"https://www.googleapis.com/youtube/v3/videos"
+        params = {
+            'part': 'snippet',
+            'id': video_id,
+            'key': YOUTUBE_API_KEY
+        }
+        
+        response = requests.get(video_url, params=params)
+        
+        if response.status_code != 200:
+            print(f"YouTube API error: {response.status_code}")
+            return None, None, None, 0.0
+        
+        data = response.json()
+        if not data.get('items'):
+            return None, None, None, 0.0
+        
+        video_info = data['items'][0]['snippet']
+        description = video_info.get('description', '')
+        video_title = video_info.get('title', original_title)
+        
+        # Use Gemini to analyze the description
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""
+You are a music industry expert. Analyze this YouTube video information to extract the correct song details.
+
+Video Title: "{video_title}"
+Channel: "{channel_title or 'Unknown'}"
+Description: "{description[:1000]}"  # First 1000 chars
+
+TASK: Extract the actual song name, artist, and album from the description and title.
+
+ANALYSIS RULES:
+1. Look for the actual song name in the description (often mentioned clearly)
+2. Find the real artist/singer (not music directors, actors, or channel names)
+3. Identify the album or movie name
+4. For Indian movies: Look for singers like "Arijit Singh", "Atif Aslam", "Shreya Ghoshal"
+5. Music directors like "Pritam", "A.R. Rahman" are NOT the singers
+6. Actor names are usually not the singers
+
+Respond in this EXACT JSON format:
+{{
+    "song_name": "Actual Song Name",
+    "artist_name": "Real Artist/Singer Name", 
+    "album_name": "Album or Movie Name",
+    "confidence": 0.95
+}}
+
+CONFIDENCE SCORING:
+- 0.9-1.0: Very confident (clear information in description)
+- 0.7-0.9: Confident (good information found)
+- 0.5-0.7: Moderate (some uncertainty)
+- 0.3-0.5: Low (limited information)
+- 0.0-0.3: Very low (guessing)
+
+EXAMPLES:
+- Title: "Samjhawan Unplugged Full Video", Description: "Samjhawan song from Humpty Sharma Ki Dulhania" → {{"song_name": "Samjhawan", "artist_name": "Arijit Singh", "album_name": "Humpty Sharma Ki Dulhania", "confidence": 0.9}}
+- Title: "Kaifi Khalil", Description: "Kahani Meri by Kaifi Khalil" → {{"song_name": "Kahani Meri", "artist_name": "Kaifi Khalil", "album_name": "Unknown", "confidence": 0.8}}
+
+Use the description to find the most accurate information possible.
+"""
+        
+        response = model.generate_content(prompt)
+        
+        # Parse the JSON response
+        try:
+            response_text = response.text.strip()
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+            elif response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+            
+            result = json.loads(response_text)
+            song_name = result.get('song_name', '').strip()
+            artist_name = result.get('artist_name', '').strip()
+            album_name = result.get('album_name', '').strip()
+            confidence = float(result.get('confidence', 0.5))
+            
+            print(f"YouTube description analysis: '{original_title}' -> Song: '{song_name}', Artist: '{artist_name}', Album: '{album_name}', Confidence: {confidence:.2f}")
+            return song_name, artist_name, album_name, confidence
+            
+        except json.JSONDecodeError as e:
+            print(f"Gemini returned invalid JSON for description analysis: {response.text}")
+            return None, None, None, 0.0
+            
+    except Exception as e:
+        print(f"YouTube description analysis error: {e}")
+        return None, None, None, 0.0
+
 def get_artist_and_album_info(song_name, original_title, channel_title=None):
     """Get artist and album information using Gemini AI with confidence scoring"""
     if not GEMINI_API_KEY:
@@ -838,39 +938,39 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         spotify_playlist_id = playlist.platform_playlist_id
                         if spotify_playlist_id:
                             print(f"Auto-adding good match: {track['name']}")
-                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
-                            songs_added += 1
-                            print(f"Successfully added '{song_info['title']}' to Spotify playlist")
-                            
-                            # Log success to file
-                            with open('/tmp/sync_debug.log', 'a') as f:
-                                f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
-                            
-                            # Store user feedback for learning
-                            if song_info.get('original_title'):
-                                feedback = UserFeedback(
-                                    user_id=current_user.user_id,
-                                    original_youtube_title=song_info['original_title'],
-                                    original_channel=song_info.get('channel_name'),
-                                    corrected_song_name=track['name'],
-                                    corrected_artist=track['artists'][0]['name'],
-                                    corrected_album=track['album']['name'],
-                                    spotify_uri=track['uri'],
-                                    confidence_score=overall_confidence,
-                                    feedback_type='confirmation'
-                                )
-                                db.session.add(feedback)
-                                db.session.commit()
-                        continue
-                    else:
-                        print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - trying fallback search")
-                        # Store poor match for user confirmation
-                        if song_info.get('original_title'):
-                            # Store in session for user confirmation
-                            if 'pending_tracks' not in session:
-                                session['pending_tracks'] = []
-                            
-                            session['pending_tracks'].append({
+                    sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                    songs_added += 1
+                    print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                    
+                    # Log success to file
+                    with open('/tmp/sync_debug.log', 'a') as f:
+                        f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
+                    
+                    # Store user feedback for learning
+                    if song_info.get('original_title'):
+                        feedback = UserFeedback(
+                            user_id=current_user.user_id,
+                            original_youtube_title=song_info['original_title'],
+                            original_channel=song_info.get('channel_name'),
+                            corrected_song_name=track['name'],
+                            corrected_artist=track['artists'][0]['name'],
+                            corrected_album=track['album']['name'],
+                            spotify_uri=track['uri'],
+                            confidence_score=overall_confidence,
+                            feedback_type='confirmation'
+                        )
+                        db.session.add(feedback)
+                        db.session.commit()
+                    continue
+                else:
+                    print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - trying fallback search")
+                    # Store poor match for user confirmation
+                    if song_info.get('original_title'):
+                        # Store in session for user confirmation
+                        if 'pending_tracks' not in session:
+                            session['pending_tracks'] = []
+                        
+                        session['pending_tracks'].append({
                                 'original_song': song_info,
                                 'fallback_tracks': [{
                                     'name': track['name'],
@@ -883,11 +983,11 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                                 }],
                                 'playlist_id': playlist.platform_playlist_id
                             })
-                            session.modified = True
-                            print(f"Stored poor match for user confirmation: {track['name']}")
+                        session.modified = True
+                        print(f"Stored poor match for user confirmation: {track['name']}")
                         # Continue to fallback search
-                else:
-                    print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
+                    else:
+                        print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
                     # Try fallback search by song name only with better strategies
                     print(f"Trying fallback search for song name only: '{song_info['title']}'")
@@ -2127,23 +2227,48 @@ def sync_playlist_songs():
                                 original_title = original_title.replace("YouTube_ORIGINAL:", "")
                                 print(f"Found original YouTube title: '{original_title}'")
                                 
-                                # Step 1: Extract clean song name using Gemini
-                                parsed_title, _ = parse_youtube_title_for_sync(original_title, song.artist)
+                                # Step 1: Try YouTube description analysis first (most accurate)
+                                video_id = platform_song.platform_specific_id
+                                desc_song_name, desc_artist_name, desc_album_name, desc_confidence = analyze_youtube_description(
+                                    video_id, original_title, song.artist
+                                )
                                 
-                                # Step 2: Get artist and album info using Gemini with confidence
-                                artist_name, album_name, gemini_confidence = get_artist_and_album_info(parsed_title, original_title, song.artist)
-                                
-                                print(f"Gemini parsed result: '{parsed_title}' by '{artist_name}' from '{album_name}' (confidence: {gemini_confidence:.2f})")
-                                
-                                songs_to_add_to_platform.append({
-                                    'title': parsed_title,
-                                    'artist': artist_name,
-                                    'album': album_name,
-                                    'original_title': original_title,
-                                    'duration': song.duration,
-                                    'gemini_confidence': gemini_confidence,
-                                    'channel_name': song.artist
-                                })
+                                if desc_song_name and desc_confidence >= 0.7:
+                                    # Use description analysis results (high confidence)
+                                    print(f"YouTube description analysis result: '{desc_song_name}' by '{desc_artist_name}' from '{desc_album_name}' (confidence: {desc_confidence:.2f})")
+                                    
+                                    songs_to_add_to_platform.append({
+                                        'title': desc_song_name,
+                                        'artist': desc_artist_name,
+                                        'album': desc_album_name,
+                                        'original_title': original_title,
+                                        'duration': song.duration,
+                                        'gemini_confidence': desc_confidence,
+                                        'channel_name': song.artist,
+                                        'source': 'youtube_description'
+                                    })
+                                else:
+                                    # Fallback to title parsing
+                                    print(f"Description analysis failed or low confidence ({desc_confidence:.2f}), trying title parsing...")
+                                    
+                                    # Step 2: Extract clean song name using Gemini
+                                    parsed_title, _ = parse_youtube_title_for_sync(original_title, song.artist)
+                                    
+                                    # Step 3: Get artist and album info using Gemini with confidence
+                                    artist_name, album_name, gemini_confidence = get_artist_and_album_info(parsed_title, original_title, song.artist)
+                                    
+                                    print(f"Gemini title parsing result: '{parsed_title}' by '{artist_name}' from '{album_name}' (confidence: {gemini_confidence:.2f})")
+                                    
+                                    songs_to_add_to_platform.append({
+                                        'title': parsed_title,
+                                        'artist': artist_name,
+                                        'album': album_name,
+                                        'original_title': original_title,
+                                        'duration': song.duration,
+                                        'gemini_confidence': gemini_confidence,
+                                        'channel_name': song.artist,
+                                        'source': 'title_parsing'
+                                    })
                             else:
                                 # Fallback to stored song data
                                 print(f"No original title found, using stored data: '{song.title}' by '{song.artist}'")
@@ -2164,11 +2289,11 @@ def sync_playlist_songs():
                     else:
                         # For other sync types, use original song data
                         songs_to_add_to_platform.append({
-                            'title': song.title,
-                            'artist': song.artist,
-                            'album': song.album,
-                            'duration': song.duration
-                        })
+                        'title': song.title,
+                        'artist': song.artist,
+                        'album': song.album,
+                        'duration': song.duration
+                    })
                 else:
                     songs_skipped += 1
         

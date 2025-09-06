@@ -445,7 +445,14 @@ Examples:
         
         # Parse the JSON response
         try:
-            result = json.loads(response.text.strip())
+            # Clean the response text - remove markdown code blocks if present
+            response_text = response.text.strip()
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+            elif response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+            
+            result = json.loads(response_text)
             song_name = result.get('song_name', title).strip()
             artist_name = result.get('artist_name', channel_title or 'Unknown Artist').strip()
             
@@ -458,8 +465,9 @@ Examples:
             print(f"Gemini parsing (selected): '{title}' -> Song: '{song_name}', Artist: '{artist_name}'")
             return song_name, artist_name
             
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             print(f"Gemini returned invalid JSON: {response.text}")
+            print(f"JSON parsing error: {e}")
             return parse_youtube_title_fallback(title, channel_title)
             
     except Exception as e:

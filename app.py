@@ -120,7 +120,7 @@ def regex_preclean_youtube_title(title, channel_title=None):
     print(f"No pattern match, using title as song: '{title.strip()}'")
     return title.strip(), (channel_title or "Unknown Artist")
 
-def hybrid_song_parsing(original_title, channel_title=None, video_id=None):
+def hybrid_song_parsing(original_title, channel_title=None, video_id=None, access_token=None):
     """Hybrid approach: regex pre-clean → Spotify search → ytmusicapi → AI recognition → manual selection"""
     
     print(f"=== HYBRID PARSING START ===")
@@ -135,7 +135,7 @@ def hybrid_song_parsing(original_title, channel_title=None, video_id=None):
     
     # Step 2: Try Spotify search with cleaned title
     print(f"\n--- Step 2: Spotify Search ---")
-    spotify_result = search_spotify_with_cleaned_title(cleaned_song, cleaned_artist)
+    spotify_result = search_spotify_with_cleaned_title(cleaned_song, cleaned_artist, access_token)
     if spotify_result:
         print(f"✅ Spotify search successful: {spotify_result['name']} by {spotify_result['artists'][0]['name']}")
         return {
@@ -172,7 +172,7 @@ def hybrid_song_parsing(original_title, channel_title=None, video_id=None):
     
     # Step 5: Manual selection fallback
     print(f"\n--- Step 5: Manual Selection Required ---")
-    manual_results = get_spotify_fallback_results(cleaned_song, cleaned_artist)
+    manual_results = get_spotify_fallback_results(cleaned_song, cleaned_artist, access_token)
     return {
         'success': False,
         'method': 'manual_selection',
@@ -184,11 +184,17 @@ def hybrid_song_parsing(original_title, channel_title=None, video_id=None):
         'fallback_results': manual_results
     }
 
-def search_spotify_with_cleaned_title(song_name, artist_name):
+def search_spotify_with_cleaned_title(song_name, artist_name, access_token=None):
     """Search Spotify with pre-cleaned title and artist"""
     try:
+        # Use provided token or fallback to session token
+        token = access_token or session.get('spotify_token')
+        if not token:
+            print("No Spotify token available for search")
+            return None
+            
         # Initialize Spotify client
-        sp = spotipy.Spotify(auth=session.get('spotify_token'))
+        sp = spotipy.Spotify(auth=token)
         
         # Try multiple search strategies
         search_queries = [
@@ -314,10 +320,16 @@ def ai_recognition_fallback(original_title, channel_title=None, video_id=None):
     print("All AI recognition methods failed")
     return None
 
-def get_spotify_fallback_results(song_name, artist_name):
+def get_spotify_fallback_results(song_name, artist_name, access_token=None):
     """Get Spotify fallback results for manual selection"""
     try:
-        sp = spotipy.Spotify(auth=session.get('spotify_token'))
+        # Use provided token or fallback to session token
+        token = access_token or session.get('spotify_token')
+        if not token:
+            print("No Spotify token available for fallback search")
+            return []
+            
+        sp = spotipy.Spotify(auth=token)
         
         # Try multiple search strategies
         search_queries = [
@@ -3204,7 +3216,7 @@ def sync_playlist_songs():
                             print(f"Found original YouTube title: '{original_title}'")
                             
                             # Use hybrid parsing approach
-                            hybrid_result = hybrid_song_parsing(original_title, song.artist, video_id)
+                            hybrid_result = hybrid_song_parsing(original_title, song.artist, video_id, target_user_account.auth_token)
                             
                             if hybrid_result['success']:
                                 # Success - add to platform

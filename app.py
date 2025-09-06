@@ -10,6 +10,8 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import google.generativeai as genai
+from thefuzz import fuzz, process
+import re
 
 # Load environment variables
 load_dotenv()
@@ -473,9 +475,9 @@ def parse_youtube_title_for_sync(title, channel_title=None):
     return parse_youtube_title_with_gemini(title, channel_title)
 
 def get_artist_and_album_info(song_name, original_title, channel_title=None):
-    """Get artist and album information using Gemini AI"""
+    """Get artist and album information using Gemini AI with confidence scoring"""
     if not GEMINI_API_KEY:
-        return None, None
+        return None, None, 0.0
     
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
@@ -500,13 +502,21 @@ SEARCH INSTRUCTIONS:
 Respond in this EXACT JSON format:
 {{
     "artist_name": "Real Artist/Singer Name",
-    "album_name": "Album or Movie Name"
+    "album_name": "Album or Movie Name",
+    "confidence": 0.95
 }}
 
+CONFIDENCE SCORING:
+- 0.9-1.0: Very confident (exact match found, multiple sources confirm)
+- 0.7-0.9: Confident (good match, some uncertainty)
+- 0.5-0.7: Moderate (partial match, some ambiguity)
+- 0.3-0.5: Low (uncertain, limited information)
+- 0.0-0.3: Very low (guessing, high uncertainty)
+
 EXAMPLES:
-- Song: "Jeena Jeena", Title: "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → {{"artist_name": "Atif Aslam", "album_name": "Badlapur"}}
-- Song: "Ae Dil Hai Mushkil", Title: "Ae Dil Hai Mushkil Title Track Full Video" → {{"artist_name": "Arijit Singh", "album_name": "Ae Dil Hai Mushkil"}}
-- Song: "Baarish Ki Jaaye", Title: "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui" → {{"artist_name": "B Praak", "album_name": "Baarish Ki Jaaye"}}
+- Song: "Jeena Jeena", Title: "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → {{"artist_name": "Atif Aslam", "album_name": "Badlapur", "confidence": 0.95}}
+- Song: "Ae Dil Hai Mushkil", Title: "Ae Dil Hai Mushkil Title Track Full Video" → {{"artist_name": "Arijit Singh", "album_name": "Ae Dil Hai Mushkil", "confidence": 0.9}}
+- Song: "Baarish Ki Jaaye", Title: "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui" → {{"artist_name": "B Praak", "album_name": "Baarish Ki Jaaye", "confidence": 0.85}}
 
 Use web search to find the most accurate information possible.
 """
@@ -524,17 +534,99 @@ Use web search to find the most accurate information possible.
             result = json.loads(response_text)
             artist_name = result.get('artist_name', '').strip()
             album_name = result.get('album_name', '').strip()
+            confidence = float(result.get('confidence', 0.5))
             
-            print(f"Gemini artist/album search: '{song_name}' -> Artist: '{artist_name}', Album: '{album_name}'")
-            return artist_name, album_name
+            print(f"Gemini artist/album search: '{song_name}' -> Artist: '{artist_name}', Album: '{album_name}', Confidence: {confidence:.2f}")
+            return artist_name, album_name, confidence
             
         except json.JSONDecodeError as e:
             print(f"Gemini returned invalid JSON for artist/album: {response.text}")
-            return None, None
+            return None, None, 0.0
             
     except Exception as e:
         print(f"Gemini API error for artist/album: {e}")
-        return None, None
+        return None, None, 0.0
+
+def advanced_fuzzy_match(song_title, artist_name, spotify_track):
+    """Advanced fuzzy matching using multiple algorithms"""
+    spotify_title = spotify_track['name'].lower()
+    spotify_artist = spotify_track['artists'][0]['name'].lower()
+    
+    song_title_lower = song_title.lower()
+    artist_name_lower = artist_name.lower() if artist_name else ""
+    
+    # 1. Token Set Ratio (ignores word order and duplicates)
+    title_token_ratio = fuzz.token_set_ratio(song_title_lower, spotify_title)
+    artist_token_ratio = fuzz.token_set_ratio(artist_name_lower, spotify_artist) if artist_name else 0
+    
+    # 2. Partial Ratio (handles partial matches)
+    title_partial_ratio = fuzz.partial_ratio(song_title_lower, spotify_title)
+    artist_partial_ratio = fuzz.partial_ratio(artist_name_lower, spotify_artist) if artist_name else 0
+    
+    # 3. Simple Ratio (exact matching)
+    title_simple_ratio = fuzz.ratio(song_title_lower, spotify_title)
+    artist_simple_ratio = fuzz.ratio(artist_name_lower, spotify_artist) if artist_name else 0
+    
+    # 4. Contains match bonus
+    title_contains = 1 if song_title_lower in spotify_title or spotify_title in song_title_lower else 0
+    artist_contains = 1 if artist_name_lower in spotify_artist or spotify_artist in artist_name_lower else 0
+    
+    # 5. Channel-based confidence boost
+    channel_boost = 0.1 if spotify_track.get('album', {}).get('name', '').lower() in ['t-series', 'sony music', 'zee music'] else 0
+    
+    # Calculate composite score
+    title_score = max(title_token_ratio, title_partial_ratio, title_simple_ratio) / 100
+    artist_score = max(artist_token_ratio, artist_partial_ratio, artist_simple_ratio) / 100 if artist_name else 0.5
+    
+    # Weighted composite score
+    composite_score = (
+        title_score * 0.6 +  # Title is more important
+        artist_score * 0.3 +  # Artist is important but less so
+        title_contains * 0.05 +  # Contains match bonus
+        artist_contains * 0.05 +  # Contains match bonus
+        channel_boost  # Channel confidence boost
+    )
+    
+    return {
+        'composite_score': composite_score,
+        'title_score': title_score,
+        'artist_score': artist_score,
+        'title_token_ratio': title_token_ratio,
+        'artist_token_ratio': artist_token_ratio,
+        'title_partial_ratio': title_partial_ratio,
+        'artist_partial_ratio': artist_partial_ratio,
+        'contains_match': title_contains or artist_contains
+    }
+
+def calculate_confidence_score(gemini_confidence, fuzzy_scores, search_strategy, channel_name=None):
+    """Calculate overall confidence score based on multiple factors"""
+    
+    # Base confidence from Gemini
+    base_confidence = gemini_confidence or 0.5
+    
+    # Fuzzy matching score
+    fuzzy_confidence = fuzzy_scores.get('composite_score', 0.0)
+    
+    # Search strategy multiplier
+    strategy_multipliers = {
+        'artist': 1.2,    # Artist search is most reliable
+        'album': 1.1,     # Album search is good
+        'song_only': 0.9  # Song-only search is less reliable
+    }
+    strategy_multiplier = strategy_multipliers.get(search_strategy, 1.0)
+    
+    # Channel confidence boost
+    trusted_channels = ['t-series', 'sony music', 'zee music', 'tips music', 'venus music']
+    channel_boost = 0.1 if channel_name and any(channel in channel_name.lower() for channel in trusted_channels) else 0
+    
+    # Calculate weighted confidence
+    overall_confidence = (
+        base_confidence * 0.4 +  # Gemini confidence
+        fuzzy_confidence * 0.4 +  # Fuzzy matching
+        min(fuzzy_confidence + 0.2, 1.0) * 0.2  # Bonus for good fuzzy match
+    ) * strategy_multiplier + channel_boost
+    
+    return min(overall_confidence, 1.0)  # Cap at 1.0
 
 def parse_youtube_title_fallback(title, channel_title=None):
     """Fallback regex-based parser when Gemini is not available"""
@@ -701,37 +793,39 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     track_uri = track['uri']
                     print(f"Found track: {track['name']} by {track['artists'][0]['name']} - URI: {track_uri}")
                     
-                    # Validate based on search strategy used
-                    track_name_lower = track['name'].lower()
-                    song_title_lower = song_info['title'].lower()
-                    
-                    # Calculate word overlap
-                    song_words = set(song_title_lower.split())
-                    track_words = set(track_name_lower.split())
-                    common_words = song_words.intersection(track_words)
-                    word_overlap_ratio = len(common_words) / len(song_words) if song_words else 0
-                    
-                    # Check for contains match
-                    contains_match = (
-                        song_title_lower in track_name_lower or 
-                        track_name_lower in song_title_lower
+                    # Advanced fuzzy matching
+                    fuzzy_scores = advanced_fuzzy_match(
+                        song_info['title'], 
+                        song_info.get('artist'), 
+                        track
                     )
                     
-                    # Different validation thresholds based on search strategy
-                    if used_strategy == 'artist':
-                        # Artist search should be very accurate
-                        is_good_match = word_overlap_ratio >= 0.7 or contains_match
-                    elif used_strategy == 'album':
-                        # Album search should be reasonably accurate
-                        is_good_match = word_overlap_ratio >= 0.5 or contains_match
-                    else:  # song_only
-                        # Song-only search can be more lenient
-                        is_good_match = word_overlap_ratio >= 0.3 or contains_match
+                    # Calculate overall confidence score
+                    overall_confidence = calculate_confidence_score(
+                        song_info.get('gemini_confidence', 0.5),
+                        fuzzy_scores,
+                        used_strategy,
+                        song_info.get('channel_name')
+                    )
                     
-                    print(f"Validation ({used_strategy}): '{song_title_lower}' vs '{track_name_lower}'")
-                    print(f"Song words: {song_words}, Track words: {track_words}")
-                    print(f"Common words: {common_words}, Overlap ratio: {word_overlap_ratio:.2f}")
-                    print(f"Contains match: {contains_match}, Good match: {is_good_match}")
+                    # Confidence-based triage
+                    if overall_confidence >= 0.8:
+                        match_quality = "HIGH"
+                        is_good_match = True
+                    elif overall_confidence >= 0.6:
+                        match_quality = "MEDIUM"
+                        is_good_match = True
+                    elif overall_confidence >= 0.4:
+                        match_quality = "LOW"
+                        is_good_match = False  # Needs user confirmation
+                    else:
+                        match_quality = "VERY_LOW"
+                        is_good_match = False  # Needs user confirmation
+                    
+                    print(f"Advanced validation ({used_strategy}): '{song_info['title']}' vs '{track['name']}'")
+                    print(f"Fuzzy scores: {fuzzy_scores}")
+                    print(f"Overall confidence: {overall_confidence:.3f} ({match_quality})")
+                    print(f"Good match: {is_good_match}")
                     
                     if is_good_match:
                         # Auto-add good matches
@@ -745,6 +839,22 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                             # Log success to file
                             with open('/tmp/sync_debug.log', 'a') as f:
                                 f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
+                            
+                            # Store user feedback for learning
+                            if song_info.get('original_title'):
+                                feedback = UserFeedback(
+                                    user_id=current_user.user_id,
+                                    original_youtube_title=song_info['original_title'],
+                                    original_channel=song_info.get('channel_name'),
+                                    corrected_song_name=track['name'],
+                                    corrected_artist=track['artists'][0]['name'],
+                                    corrected_album=track['album']['name'],
+                                    spotify_uri=track['uri'],
+                                    confidence_score=overall_confidence,
+                                    feedback_type='confirmation'
+                                )
+                                db.session.add(feedback)
+                                db.session.commit()
                         continue
                     else:
                         print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - trying fallback search")
@@ -1111,6 +1221,22 @@ class SyncSong(db.Model):
     song_id = db.Column(db.Integer, db.ForeignKey('song.song_id'), primary_key=True)
     action = db.Column(db.String(10), nullable=False)  # 'added' or 'removed'
     timestamp = db.Column(db.DateTime, default=datetime.now)
+
+class UserFeedback(db.Model):
+    """Table to store user corrections for machine learning"""
+    __tablename__ = 'user_feedback'
+    feedback_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('User_.user_id'), nullable=False)
+    original_youtube_title = db.Column(db.Text, nullable=False)
+    original_channel = db.Column(db.String(200))
+    corrected_song_name = db.Column(db.String(200), nullable=False)
+    corrected_artist = db.Column(db.String(200), nullable=False)
+    corrected_album = db.Column(db.String(200))
+    spotify_uri = db.Column(db.String(200))
+    confidence_score = db.Column(db.Float, default=0.0)
+    feedback_type = db.Column(db.String(20), nullable=False)  # 'correction', 'confirmation', 'rejection'
+    timestamp = db.Column(db.DateTime, default=datetime.now)
+    used_for_training = db.Column(db.Boolean, default=False)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -1941,17 +2067,19 @@ def sync_playlist_songs():
                                 # Step 1: Extract clean song name using Gemini
                                 parsed_title, _ = parse_youtube_title_for_sync(original_title, song.artist)
                                 
-                                # Step 2: Get artist and album info using Gemini
-                                artist_name, album_name = get_artist_and_album_info(parsed_title, original_title, song.artist)
+                                # Step 2: Get artist and album info using Gemini with confidence
+                                artist_name, album_name, gemini_confidence = get_artist_and_album_info(parsed_title, original_title, song.artist)
                                 
-                                print(f"Gemini parsed result: '{parsed_title}' by '{artist_name}' from '{album_name}'")
+                                print(f"Gemini parsed result: '{parsed_title}' by '{artist_name}' from '{album_name}' (confidence: {gemini_confidence:.2f})")
                                 
                                 songs_to_add_to_platform.append({
                                     'title': parsed_title,
                                     'artist': artist_name,
                                     'album': album_name,
                                     'original_title': original_title,
-                                    'duration': song.duration
+                                    'duration': song.duration,
+                                    'gemini_confidence': gemini_confidence,
+                                    'channel_name': song.artist
                                 })
                             else:
                                 # Fallback to stored song data

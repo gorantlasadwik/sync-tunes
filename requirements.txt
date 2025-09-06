@@ -13,3 +13,4 @@ google-auth==2.23.0
 psycopg2-binary==2.9.7
 gunicorn==21.2.0
 google-generativeai==0.3.2
+thefuzz==0.22.1

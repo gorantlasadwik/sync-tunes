@@ -619,31 +619,48 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     track_uri = track['uri']
                     print(f"Found track: {track['name']} by {track['artists'][0]['name']} - URI: {track_uri}")
                     
-                    # Store successful track for user confirmation (instead of auto-adding)
-                    successful_track = {
-                        'name': track['name'],
-                        'artist': track['artists'][0]['name'],
-                        'uri': track_uri,
-                        'album': track['album']['name'],
-                        'is_exact_match': True
-                    }
+                    # Check if user has auto-confirm enabled for exact matches
+                    auto_confirm_exact = session.get('auto_confirm_exact_matches', False)
                     
-                    # Store in session for user confirmation
-                    if 'pending_tracks' not in session:
-                        session['pending_tracks'] = []
-                    
-                    session['pending_tracks'].append({
-                        'original_song': song_info,
-                        'fallback_tracks': [successful_track],
-                        'playlist_id': playlist.platform_playlist_id
-                    })
-                    session.modified = True
-                    
-                    print(f"Stored successful track for user confirmation: {track['name']}")
-                    
-                    # Log success to file
-                    with open('/tmp/sync_debug.log', 'a') as f:
-                        f.write(f"Found exact match for '{song_info['title']}' - stored for confirmation\n")
+                    if auto_confirm_exact:
+                        # Auto-add exact matches if user has enabled this setting
+                        spotify_playlist_id = playlist.platform_playlist_id
+                        if spotify_playlist_id:
+                            print(f"Auto-adding exact match: {track['name']}")
+                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                            songs_added += 1
+                            print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                            
+                            # Log success to file
+                            with open('/tmp/sync_debug.log', 'a') as f:
+                                f.write(f"Auto-added exact match: '{song_info['title']}' -> '{track['name']}'\n")
+                        continue
+                    else:
+                        # Store successful track for user confirmation
+                        successful_track = {
+                            'name': track['name'],
+                            'artist': track['artists'][0]['name'],
+                            'uri': track_uri,
+                            'album': track['album']['name'],
+                            'is_exact_match': True
+                        }
+                        
+                        # Store in session for user confirmation
+                        if 'pending_tracks' not in session:
+                            session['pending_tracks'] = []
+                        
+                        session['pending_tracks'].append({
+                            'original_song': song_info,
+                            'fallback_tracks': [successful_track],
+                            'playlist_id': playlist.platform_playlist_id
+                        })
+                        session.modified = True
+                        
+                        print(f"Stored successful track for user confirmation: {track['name']}")
+                        
+                        # Log success to file
+                        with open('/tmp/sync_debug.log', 'a') as f:
+                            f.write(f"Found exact match for '{song_info['title']}' - stored for confirmation\n")
                 else:
                     print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
@@ -1955,7 +1972,21 @@ def confirm_track():
             session['pending_tracks'] = pending_tracks
             session.modified = True
             
-            flash(f"Successfully added '{selected_track['name']}' by {selected_track['artist']} to playlist!")
+            # Learning mechanism: Track exact match confirmations
+            if selected_track.get('is_exact_match'):
+                exact_match_count = session.get('exact_match_confirmations', 0) + 1
+                session['exact_match_confirmations'] = exact_match_count
+                session.modified = True
+                
+                # Auto-enable after 5 exact match confirmations
+                if exact_match_count >= 5 and not session.get('auto_confirm_exact_matches'):
+                    session['auto_confirm_exact_matches'] = True
+                    session.modified = True
+                    flash(f"Successfully added '{selected_track['name']}' by {selected_track['artist']} to playlist! 🎉 Auto-confirm enabled for exact matches after {exact_match_count} confirmations.")
+                else:
+                    flash(f"Successfully added '{selected_track['name']}' by {selected_track['artist']} to playlist!")
+            else:
+                flash(f"Successfully added '{selected_track['name']}' by {selected_track['artist']} to playlist!")
             
             # Log success
             with open('/tmp/sync_debug.log', 'a') as f:
@@ -2008,6 +2039,26 @@ def skip_track():
     except Exception as e:
         flash(f'Error skipping track: {str(e)}')
         return redirect(url_for('confirm_fallback_tracks'))
+
+@app.route('/toggle_auto_confirm', methods=['POST'])
+@login_required
+def toggle_auto_confirm():
+    """Toggle auto-confirm for exact matches"""
+    try:
+        auto_confirm = request.form.get('auto_confirm') == 'true'
+        session['auto_confirm_exact_matches'] = auto_confirm
+        session.modified = True
+        
+        if auto_confirm:
+            flash('Auto-confirm enabled: Exact matches will be added automatically without confirmation.')
+        else:
+            flash('Auto-confirm disabled: All tracks will require user confirmation.')
+        
+        return redirect(url_for('dashboard'))
+        
+    except Exception as e:
+        flash(f'Error updating auto-confirm setting: {str(e)}')
+        return redirect(url_for('dashboard'))
 
 @app.route('/sync_cross_platform', methods=['POST'])
 @login_required

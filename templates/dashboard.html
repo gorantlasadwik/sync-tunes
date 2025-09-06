@@ -79,6 +79,31 @@
         </div>
     </div>
     
+    <!-- Auto-Confirm Settings -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">⚙️ Sync Settings</h3>
+        </div>
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h6 class="mb-1">Auto-Confirm Exact Matches</h6>
+                    <p class="text-muted mb-0 small">
+                        When enabled, songs with exact artist matches will be added automatically without confirmation.
+                        Fallback search results will still require confirmation.
+                    </p>
+                </div>
+                <form method="POST" action="{{ url_for('toggle_auto_confirm') }}" class="d-inline">
+                    <input type="hidden" name="auto_confirm" value="{{ 'false' if session.get('auto_confirm_exact_matches') else 'true' }}">
+                    <button type="submit" class="btn {% if session.get('auto_confirm_exact_matches') %}btn-success{% else %}btn-outline-success{% endif %} btn-sm">
+                        <i class="fas {% if session.get('auto_confirm_exact_matches') %}fa-toggle-on{% else %}fa-toggle-off{% endif %}"></i>
+                        {% if session.get('auto_confirm_exact_matches') %}Enabled{% else %}Disabled{% endif %}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
     <div class="card">
         <div class="card-header">
             <h3 class="card-title">Your Playlists</h3>

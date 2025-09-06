@@ -1423,14 +1423,32 @@ def sync_playlist_songs():
                 f.write(f"Source account ID: {source_playlist.account_id}, Target account ID: {target_playlist.account_id}\n")
                 f.write(f"User account ID: {user_account.account_id}\n")
         
-        if not user_account or user_account.account_id != target_playlist.account_id:
+        if not user_account:
             with open('/tmp/sync_debug.log', 'a') as f:
-                f.write("ERROR: Access denied - account mismatch\n")
-            flash('Access denied')
+                f.write("ERROR: No user account found for source playlist\n")
+            flash('You do not have access to the source playlist.')
             return redirect(url_for('dashboard'))
         
-        # Get platform info
-        platform = db.session.get(Platform, user_account.platform_id)
+        # For cross-platform syncing, we need to get the target platform account
+        target_user_account = UserPlatformAccount.query.filter_by(
+            user_id=current_user.user_id,
+            account_id=target_playlist.account_id
+        ).first()
+        
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"Target user account found: {target_user_account is not None}\n")
+        
+        if not target_user_account:
+            with open('/tmp/sync_debug.log', 'a') as f:
+                f.write("ERROR: No user account found for target playlist\n")
+            flash('You do not have access to the target playlist.')
+            return redirect(url_for('dashboard'))
+        
+        # Get platform info for the target platform
+        platform = db.session.get(Platform, target_user_account.platform_id)
+        
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"Target platform: {platform.platform_name if platform else 'None'}\n")
         
         # Sync songs to database first
         songs_added = 0
@@ -1477,7 +1495,7 @@ def sync_playlist_songs():
         with open('/tmp/sync_debug.log', 'a') as f:
             f.write(f"=== SYNC DEBUG START ===\n")
             f.write(f"Sync debug - Platform: {platform.platform_name if platform else 'None'}\n")
-            f.write(f"Sync debug - User account token: {'Present' if user_account.auth_token else 'Missing'}\n")
+            f.write(f"Sync debug - Target account token: {'Present' if target_user_account.auth_token else 'Missing'}\n")
             f.write(f"Songs to add to platform: {len(songs_to_add_to_platform)}\n")
             f.write(f"Target playlist: {target_playlist.name if target_playlist else 'None'}\n")
             f.write(f"Target playlist platform ID: {target_playlist.platform_playlist_id if target_playlist else 'None'}\n")
@@ -1489,11 +1507,11 @@ def sync_playlist_songs():
         print(f"Target playlist: {target_playlist.name if target_playlist else 'None'}")
         print(f"Target playlist platform ID: {target_playlist.platform_playlist_id if target_playlist else 'None'}")
         
-        if platform and user_account.auth_token and songs_to_add_to_platform:
+        if platform and target_user_account.auth_token and songs_to_add_to_platform:
             if platform.platform_name == 'YouTube':
                 print("=== CALLING update_youtube_playlist ===")
                 platform_songs_added = update_youtube_playlist(
-                    user_account.auth_token, 
+                    target_user_account.auth_token, 
                     target_playlist, 
                     songs_to_add_to_platform
                 )
@@ -1501,7 +1519,7 @@ def sync_playlist_songs():
             elif platform.platform_name == 'Spotify':
                 print("=== CALLING update_spotify_playlist ===")
                 platform_songs_added = update_spotify_playlist(
-                    user_account.auth_token, 
+                    target_user_account.auth_token, 
                     target_playlist, 
                     songs_to_add_to_platform
                 )
@@ -1509,7 +1527,7 @@ def sync_playlist_songs():
         else:
             print("=== SYNC CONDITIONS NOT MET ===")
             print(f"Platform exists: {platform is not None}")
-            print(f"User account token exists: {user_account.auth_token is not None}")
+            print(f"Target account token exists: {target_user_account.auth_token is not None}")
             print(f"Songs to add exists: {len(songs_to_add_to_platform) > 0}")
         print(f"=== SYNC DEBUG END ===")
         

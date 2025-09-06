@@ -19,6 +19,8 @@ load_dotenv()
 # Configure Gemini API
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 GEMINI_QUOTA_EXCEEDED = False  # Global flag to track quota status
+GEMINI_QUOTA_RESET_TIME = None  # Track when quota was last reset
+
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     print(f"✅ Gemini API configured with key: {GEMINI_API_KEY[:10]}...")
@@ -29,6 +31,25 @@ if GROQ_API_KEY:
     print(f"✅ Groq API configured with key: {GROQ_API_KEY[:10]}...")
 else:
     print("⚠️ Groq API key not found - will use fallback parsing only")
+
+def check_and_reset_gemini_quota():
+    """Check if 24 hours have passed since last quota reset and reset if needed"""
+    global GEMINI_QUOTA_EXCEEDED, GEMINI_QUOTA_RESET_TIME
+    
+    current_time = datetime.now()
+    
+    # If quota is exceeded and we haven't reset in 24 hours, reset it
+    if GEMINI_QUOTA_EXCEEDED and GEMINI_QUOTA_RESET_TIME:
+        time_since_reset = current_time - GEMINI_QUOTA_RESET_TIME
+        if time_since_reset.total_seconds() >= 24 * 60 * 60:  # 24 hours
+            GEMINI_QUOTA_EXCEEDED = False
+            GEMINI_QUOTA_RESET_TIME = current_time
+            print("🔄 Gemini quota automatically reset after 24 hours")
+    
+    # If quota is exceeded but we haven't set a reset time, set it now
+    elif GEMINI_QUOTA_EXCEEDED and not GEMINI_QUOTA_RESET_TIME:
+        GEMINI_QUOTA_RESET_TIME = current_time
+        print("⏰ Gemini quota exceeded - will auto-reset in 24 hours")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
@@ -723,21 +744,6 @@ Respond in this EXACT JSON format:
         print(f"Groq API error for description analysis: {e}")
         return None, None, None, 0.0
 
-@app.route('/reset_gemini_quota', methods=['POST'])
-@login_required
-def reset_gemini_quota_route():
-    """Reset the Gemini quota flag"""
-    reset_gemini_quota()
-    flash('Gemini quota has been reset. You can now use advanced parsing features.')
-    return redirect(url_for('dashboard'))
-
-@app.route('/reset_ai_quota', methods=['POST'])
-@login_required
-def reset_ai_quota_route():
-    """Reset both Gemini and Groq quota flags"""
-    reset_gemini_quota()
-    flash('AI quota has been reset. Both Gemini and Groq are now available for advanced parsing.')
-    return redirect(url_for('dashboard'))
 
 def parse_youtube_title_with_gemini(title, channel_title=None):
     """Parse YouTube video title using Gemini AI for intelligent extraction (for selected songs only)"""
@@ -823,6 +829,9 @@ Respond with ONLY the clean song name, nothing else.
 
 def parse_youtube_title_for_sync(title, channel_title=None):
     """Parse YouTube video title using Gemini AI for selected songs during sync, with Groq fallback"""
+    # Check and reset Gemini quota if 24 hours have passed
+    check_and_reset_gemini_quota()
+    
     # Try Gemini first
     if GEMINI_API_KEY and not GEMINI_QUOTA_EXCEEDED:
         try:
@@ -842,6 +851,9 @@ def parse_youtube_title_for_sync(title, channel_title=None):
 def get_spotify_song_name_from_youtube_url(video_id, original_title, channel_title=None):
     """Use Gemini with YouTube video URL to get the exact Spotify song name, with Groq fallback"""
     global GEMINI_QUOTA_EXCEEDED
+    
+    # Check and reset Gemini quota if 24 hours have passed
+    check_and_reset_gemini_quota()
     
     # Try Gemini first
     if GEMINI_API_KEY and not GEMINI_QUOTA_EXCEEDED:

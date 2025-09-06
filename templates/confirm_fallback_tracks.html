@@ -30,12 +30,16 @@
                             {% for track in song_data['fallback_tracks'] %}
                             {% set track_index = loop.index0 %}
                             <div class="col-md-6 mb-3">
-                                <div class="card {% if track.get('is_exact_match') %}border-success{% else %}border-primary{% endif %}">
+                                <div class="card {% if track.get('is_exact_match') %}border-success{% elif track.get('is_poor_match') %}border-warning{% else %}border-primary{% endif %}">
                                     <div class="card-body">
-                                        <h6 class="card-title {% if track.get('is_exact_match') %}text-success{% else %}text-primary{% endif %}">
+                                        <h6 class="card-title {% if track.get('is_exact_match') %}text-success{% elif track.get('is_poor_match') %}text-warning{% else %}text-primary{% endif %}">
                                             <i class="fas fa-play-circle"></i> {{ track['name'] }}
                                             {% if track.get('is_exact_match') %}
                                                 <span class="badge bg-success ms-2">Exact Match</span>
+                                            {% elif track.get('is_poor_match') %}
+                                                <span class="badge bg-warning ms-2">Poor Match</span>
+                                            {% elif track.get('is_fallback') %}
+                                                <span class="badge bg-info ms-2">Fallback ({{ "%.1f"|format(track.get('score', 0)) }})</span>
                                             {% endif %}
                                         </h6>
                                         <p class="card-text">

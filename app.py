@@ -738,8 +738,8 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         spotify_playlist_id = playlist.platform_playlist_id
                         if spotify_playlist_id:
                             print(f"Auto-adding good match: {track['name']}")
-                    sp.playlist_add_items(spotify_playlist_id, [track_uri])
-                    songs_added += 1
+                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                            songs_added += 1
                             print(f"Successfully added '{song_info['title']}' to Spotify playlist")
                             
                             # Log success to file
@@ -1355,7 +1355,7 @@ def spotify_callback():
         # Get user info from Spotify with error handling
         sp = spotipy.Spotify(auth=access_token)
         try:
-        user_info = sp.current_user()
+            user_info = sp.current_user()
             print(f"Spotify callback - user info: {user_info}")
         except Exception as e:
             print(f"Spotify callback error: {e}")
@@ -1972,12 +1972,12 @@ def sync_playlist_songs():
                             })
                     else:
                         # For other sync types, use original song data
-                    songs_to_add_to_platform.append({
-                        'title': song.title,
-                        'artist': song.artist,
-                        'album': song.album,
-                        'duration': song.duration
-                    })
+                        songs_to_add_to_platform.append({
+                            'title': song.title,
+                            'artist': song.artist,
+                            'album': song.album,
+                            'duration': song.duration
+                        })
                 else:
                     songs_skipped += 1
         

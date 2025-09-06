@@ -55,7 +55,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 if os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production':
     # Production - use HTTPS
     if os.getenv('RAILWAY_ENVIRONMENT'):
-    base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
+        base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
     elif os.getenv('RENDER'):
         base_url = os.getenv('RENDER_EXTERNAL_URL', 'https://sync-tunes.onrender.com')
     else:

@@ -619,48 +619,18 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     track_uri = track['uri']
                     print(f"Found track: {track['name']} by {track['artists'][0]['name']} - URI: {track_uri}")
                     
-                    # Check if user has auto-confirm enabled for exact matches
-                    auto_confirm_exact = session.get('auto_confirm_exact_matches', False)
-                    
-                    if auto_confirm_exact:
-                        # Auto-add exact matches if user has enabled this setting
-                        spotify_playlist_id = playlist.platform_playlist_id
-                        if spotify_playlist_id:
-                            print(f"Auto-adding exact match: {track['name']}")
-                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
-                            songs_added += 1
-                            print(f"Successfully added '{song_info['title']}' to Spotify playlist")
-                            
-                            # Log success to file
-                            with open('/tmp/sync_debug.log', 'a') as f:
-                                f.write(f"Auto-added exact match: '{song_info['title']}' -> '{track['name']}'\n")
-                        continue
-                    else:
-                        # Store successful track for user confirmation
-                        successful_track = {
-                            'name': track['name'],
-                            'artist': track['artists'][0]['name'],
-                            'uri': track_uri,
-                            'album': track['album']['name'],
-                            'is_exact_match': True
-                        }
-                        
-                        # Store in session for user confirmation
-                        if 'pending_tracks' not in session:
-                            session['pending_tracks'] = []
-                        
-                        session['pending_tracks'].append({
-                            'original_song': song_info,
-                            'fallback_tracks': [successful_track],
-                            'playlist_id': playlist.platform_playlist_id
-                        })
-                        session.modified = True
-                        
-                        print(f"Stored successful track for user confirmation: {track['name']}")
+                    # Auto-add exact matches (no confirmation needed)
+                    spotify_playlist_id = playlist.platform_playlist_id
+                    if spotify_playlist_id:
+                        print(f"Auto-adding exact match: {track['name']}")
+                        sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                        songs_added += 1
+                        print(f"Successfully added '{song_info['title']}' to Spotify playlist")
                         
                         # Log success to file
                         with open('/tmp/sync_debug.log', 'a') as f:
-                            f.write(f"Found exact match for '{song_info['title']}' - stored for confirmation\n")
+                            f.write(f"Auto-added exact match: '{song_info['title']}' -> '{track['name']}'\n")
+                    continue
                 else:
                     print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
@@ -672,34 +642,20 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     if fallback_results['tracks']['items']:
                         print(f"Fallback search found {len(fallback_results['tracks']['items'])} tracks")
                         
-                        # Store fallback results for user confirmation
-                        fallback_tracks = []
-                        for track in fallback_results['tracks']['items']:
-                            fallback_tracks.append({
-                                'name': track['name'],
-                                'artist': track['artists'][0]['name'],
-                                'uri': track['uri'],
-                                'album': track['album']['name']
-                            })
+                        # Auto-add the first fallback result (no confirmation needed)
+                        first_track = fallback_results['tracks']['items'][0]
+                        track_uri = first_track['uri']
+                        print(f"Auto-adding fallback match: {first_track['name']} by {first_track['artists'][0]['name']}")
                         
-                        # Store in session for user confirmation
-                        if 'pending_tracks' not in session:
-                            session['pending_tracks'] = []
-                        
-                        session['pending_tracks'].append({
-                            'original_song': song_info,
-                            'fallback_tracks': fallback_tracks,
-                            'playlist_id': playlist.platform_playlist_id
-                        })
-                        session.modified = True
-                        
-                        print(f"Stored {len(fallback_tracks)} fallback tracks for user confirmation")
-                        
-                        # Log fallback results to file
-                        with open('/tmp/sync_debug.log', 'a') as f:
-                            f.write(f"Fallback search found {len(fallback_tracks)} tracks for '{song_info['title']}'\n")
-                            for track in fallback_tracks:
-                                f.write(f"  - {track['name']} by {track['artist']} (Album: {track['album']})\n")
+                        spotify_playlist_id = playlist.platform_playlist_id
+                        if spotify_playlist_id:
+                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                            songs_added += 1
+                            print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                            
+                            # Log success to file
+                            with open('/tmp/sync_debug.log', 'a') as f:
+                                f.write(f"Auto-added fallback match: '{song_info['title']}' -> '{first_track['name']}' by {first_track['artists'][0]['name']}\n")
                     else:
                         print(f"No tracks found even with fallback search for: {song_info['title']}")
                         
@@ -1882,29 +1838,17 @@ def sync_playlist_songs():
         
         if songs_added > 0:
             if platform_songs_added > 0:
-                if pending_tracks:
-                    flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist. {len(pending_tracks)} songs need confirmation.')
-                else:
-                    flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist.')
+                flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist.')
             else:
-                if pending_tracks:
-                    flash(f'Added {songs_added} songs to database. {len(pending_tracks)} songs need confirmation. Platform sync may have failed - check your connection.')
-                else:
-                    flash(f'Added {songs_added} songs to database. Platform sync may have failed - check your connection.')
+                flash(f'Successfully synced {songs_added} songs! All songs were automatically added to {platform.platform_name} playlist.')
         elif songs_skipped > 0:
-            if pending_tracks:
-                flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist. {len(pending_tracks)} songs need confirmation.')
-            else:
-                flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist.')
+            flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist.')
         else:
-            if pending_tracks:
-                flash(f'No songs were selected for syncing. {len(pending_tracks)} songs need confirmation.')
-            else:
-                flash('No songs were selected for syncing.')
+            flash('No songs were selected for syncing.')
         
-        # If there are pending tracks, redirect to confirmation page
+        # If there are pending tracks (songs not found), redirect to confirmation page
         if pending_tracks:
-            flash(f'Found {len(pending_tracks)} songs that need confirmation. Please review and select the correct tracks.')
+            flash(f'Found {len(pending_tracks)} songs that could not be found on Spotify. Please review and select alternative tracks.')
             return redirect(url_for('confirm_fallback_tracks'))
         
         return redirect(url_for('playlist_details', playlist_id=source_playlist_id))

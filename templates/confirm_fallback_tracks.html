@@ -10,7 +10,8 @@
             <p class="text-muted">Some songs couldn't be found with the exact artist name. Please confirm which tracks you'd like to add to your playlist.</p>
             
             {% if pending_tracks %}
-                {% for song_index, song_data in enumerate(pending_tracks) %}
+                {% for song_data in pending_tracks %}
+                {% set song_index = loop.index0 %}
                 <div class="card mb-4">
                     <div class="card-header bg-warning text-dark">
                         <h5 class="mb-0">
@@ -25,7 +26,8 @@
                         </p>
                         
                         <div class="row">
-                            {% for track_index, track in enumerate(song_data['fallback_tracks']) %}
+                            {% for track in song_data['fallback_tracks'] %}
+                            {% set track_index = loop.index0 %}
                             <div class="col-md-6 mb-3">
                                 <div class="card border-primary">
                                     <div class="card-body">

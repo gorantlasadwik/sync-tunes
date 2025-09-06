@@ -505,6 +505,9 @@ def get_spotify_song_name_from_youtube_url(video_id, original_title, channel_tit
         return None, None, None, 0.0
     
     try:
+        # Create Gemini model
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
         # Create YouTube video URL
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
         
@@ -1209,6 +1212,11 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     
                     # Try fallback search with Gemini re-analysis of full YouTube title
                     print(f"All strategies failed, asking Gemini to re-analyze full YouTube title...")
+                    
+                    # Initialize pending_tracks for fallback results
+                    if 'pending_tracks' not in session:
+                        session['pending_tracks'] = []
+                    pending_tracks = session['pending_tracks']
                     
                     # Get the original YouTube title for re-analysis
                     original_title = song_info.get('original_title', song_info['title'])
@@ -2684,8 +2692,8 @@ def confirm_track():
             sp = spotipy.Spotify(auth=user_account.auth_token)
             sp.playlist_add_items(playlist_id, [selected_track['uri']])
             
-            # Remove this song from pending tracks
-            pending_tracks.pop(song_index)
+            # Remove this track from pending tracks
+            pending_tracks.pop(track_index)
             session['pending_tracks'] = pending_tracks
             session.modified = True
             
@@ -2745,7 +2753,7 @@ def skip_track():
         
         # Log skip
         with open('/tmp/sync_debug.log', 'a') as f:
-            f.write(f"User skipped track: {track_data['song_info']['title']}\n")
+            f.write(f"User skipped track: {pending_tracks[track_index]['song_info']['title']}\n")
         
         # If no more pending tracks, redirect to dashboard
         if not pending_tracks:

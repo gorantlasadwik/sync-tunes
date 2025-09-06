@@ -2835,14 +2835,17 @@ def sync_playlist_songs():
         for song_id in song_ids:
             song = db.session.get(Song, song_id)
             if song:
-                # Check if song already exists in target playlist
+                # Always add to database (PlaylistSong table) - this tracks our sync history
                 existing = PlaylistSong.query.filter_by(
                     playlist_id=target_playlist.playlist_id,
                     song_id=song.song_id
                 ).first()
                 
+                # Always prepare for platform API call (regardless of database status)
+                # This ensures songs are added to the actual Spotify playlist even if they exist in our database
+                
+                # Add to database if not already there
                 if not existing:
-                    # Add to database
                     playlist_song = PlaylistSong(
                         playlist_id=target_playlist.playlist_id,
                         song_id=song.song_id,
@@ -2851,17 +2854,16 @@ def sync_playlist_songs():
                     db.session.add(playlist_song)
                     songs_added += 1
                     synced_song_ids.append(song.song_id)  # Track this synced song
+                
+                # If syncing from YouTube to another platform, use Gemini for better parsing
+                if source_platform.platform_name == 'YouTube' and platform.platform_name != 'YouTube':
+                    # Get the original YouTube title from the platform song mapping
+                    platform_song = PlatformSong.query.filter_by(
+                        song_id=song.song_id,
+                        platform_id=source_platform.platform_id
+                    ).first()
                     
-                    # Prepare for platform API call
-                    # If syncing from YouTube to another platform, use Gemini for better parsing
-                    if source_platform.platform_name == 'YouTube' and platform.platform_name != 'YouTube':
-                        # Get the original YouTube title from the platform song mapping
-                        platform_song = PlatformSong.query.filter_by(
-                            song_id=song.song_id,
-                            platform_id=source_platform.platform_id
-                        ).first()
-                        
-                        if platform_song:
+                    if platform_song:
                             # Extract the original YouTube title from the album field
                             original_title = song.album
                             if original_title.startswith("YouTube_ORIGINAL:"):
@@ -2977,8 +2979,6 @@ def sync_playlist_songs():
                         'album': song.album,
                         'duration': song.duration
                     })
-                else:
-                    songs_skipped += 1
         
         # Commit database changes
         db.session.commit()

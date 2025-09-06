@@ -634,9 +634,48 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                 else:
                     print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
-                    # Log no results to file
-                    with open('/tmp/sync_debug.log', 'a') as f:
-                        f.write(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}\n")
+                    # Try fallback search by song name only
+                    print(f"Trying fallback search for song name only: '{song_info['title']}'")
+                    fallback_query = f"track:{song_info['title']}"
+                    fallback_results = sp.search(q=fallback_query, type='track', limit=5)
+                    
+                    if fallback_results['tracks']['items']:
+                        print(f"Fallback search found {len(fallback_results['tracks']['items'])} tracks")
+                        
+                        # Store fallback results for user confirmation
+                        fallback_tracks = []
+                        for track in fallback_results['tracks']['items']:
+                            fallback_tracks.append({
+                                'name': track['name'],
+                                'artist': track['artists'][0]['name'],
+                                'uri': track['uri'],
+                                'album': track['album']['name']
+                            })
+                        
+                        # Store in session for user confirmation
+                        if 'pending_tracks' not in session:
+                            session['pending_tracks'] = []
+                        
+                        session['pending_tracks'].append({
+                            'original_song': song_info,
+                            'fallback_tracks': fallback_tracks,
+                            'playlist_id': playlist.platform_playlist_id
+                        })
+                        session.modified = True
+                        
+                        print(f"Stored {len(fallback_tracks)} fallback tracks for user confirmation")
+                        
+                        # Log fallback results to file
+                        with open('/tmp/sync_debug.log', 'a') as f:
+                            f.write(f"Fallback search found {len(fallback_tracks)} tracks for '{song_info['title']}'\n")
+                            for track in fallback_tracks:
+                                f.write(f"  - {track['name']} by {track['artist']} (Album: {track['album']})\n")
+                    else:
+                        print(f"No tracks found even with fallback search for: {song_info['title']}")
+                        
+                        # Log no results to file
+                        with open('/tmp/sync_debug.log', 'a') as f:
+                            f.write(f"No Spotify track found for: {song_info['title']} by {song_info['artist']} (no fallback results)\n")
                     
             except Exception as song_error:
                 print(f"Error adding song '{song_info['title']}' to Spotify: {song_error}")
@@ -1808,6 +1847,9 @@ def sync_playlist_songs():
         db.session.commit()
         
         # User feedback
+        # Check if there are pending tracks for user confirmation
+        pending_tracks = session.get('pending_tracks', [])
+        
         if songs_added > 0:
             if platform_songs_added > 0:
                 flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist.')
@@ -1818,12 +1860,129 @@ def sync_playlist_songs():
         else:
             flash('No songs were selected for syncing.')
         
+        # If there are pending tracks, redirect to confirmation page
+        if pending_tracks:
+            flash(f'Found {len(pending_tracks)} songs that need confirmation. Please review and select the correct tracks.')
+            return redirect(url_for('confirm_fallback_tracks'))
+        
         return redirect(url_for('playlist_details', playlist_id=source_playlist_id))
         
     except Exception as e:
         flash(f'Error syncing songs: {str(e)}')
         db.session.rollback()
         return redirect(url_for('dashboard'))
+
+@app.route('/confirm_fallback_tracks')
+@login_required
+def confirm_fallback_tracks():
+    """Show fallback tracks for user confirmation"""
+    pending_tracks = session.get('pending_tracks', [])
+    if not pending_tracks:
+        flash('No pending tracks to confirm.')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('confirm_fallback_tracks.html', pending_tracks=pending_tracks)
+
+@app.route('/confirm_track', methods=['POST'])
+@login_required
+def confirm_track():
+    """Confirm a fallback track selection"""
+    try:
+        track_index = int(request.form.get('track_index'))
+        song_index = int(request.form.get('song_index'))
+        
+        pending_tracks = session.get('pending_tracks', [])
+        if song_index >= len(pending_tracks):
+            flash('Invalid song selection.')
+            return redirect(url_for('confirm_fallback_tracks'))
+        
+        song_data = pending_tracks[song_index]
+        if track_index >= len(song_data['fallback_tracks']):
+            flash('Invalid track selection.')
+            return redirect(url_for('confirm_fallback_tracks'))
+        
+        selected_track = song_data['fallback_tracks'][track_index]
+        playlist_id = song_data['playlist_id']
+        
+        # Add the selected track to Spotify playlist
+        try:
+            # Get user's Spotify account
+            platform = Platform.query.filter_by(platform_name='Spotify').first()
+            if not platform:
+                flash('Spotify platform not found.')
+                return redirect(url_for('confirm_fallback_tracks'))
+            
+            user_account = UserPlatformAccount.query.filter_by(
+                user_id=current_user.user_id,
+                platform_id=platform.platform_id
+            ).first()
+            
+            if not user_account or not user_account.auth_token:
+                flash('Spotify account not connected.')
+                return redirect(url_for('confirm_fallback_tracks'))
+            
+            # Add track to playlist
+            sp = spotipy.Spotify(auth=user_account.auth_token)
+            sp.playlist_add_items(playlist_id, [selected_track['uri']])
+            
+            # Remove this song from pending tracks
+            pending_tracks.pop(song_index)
+            session['pending_tracks'] = pending_tracks
+            session.modified = True
+            
+            flash(f"Successfully added '{selected_track['name']}' by {selected_track['artist']} to playlist!")
+            
+            # Log success
+            with open('/tmp/sync_debug.log', 'a') as f:
+                f.write(f"User confirmed track: '{selected_track['name']}' by {selected_track['artist']} - URI: {selected_track['uri']}\n")
+            
+        except Exception as e:
+            flash(f'Error adding track to playlist: {str(e)}')
+            with open('/tmp/sync_debug.log', 'a') as f:
+                f.write(f"Error adding confirmed track: {str(e)}\n")
+        
+        # If no more pending tracks, redirect to dashboard
+        if not pending_tracks:
+            return redirect(url_for('dashboard'))
+        else:
+            return redirect(url_for('confirm_fallback_tracks'))
+            
+    except Exception as e:
+        flash(f'Error processing track confirmation: {str(e)}')
+        return redirect(url_for('confirm_fallback_tracks'))
+
+@app.route('/skip_track', methods=['POST'])
+@login_required
+def skip_track():
+    """Skip a fallback track (don't add to playlist)"""
+    try:
+        song_index = int(request.form.get('song_index'))
+        
+        pending_tracks = session.get('pending_tracks', [])
+        if song_index >= len(pending_tracks):
+            flash('Invalid song selection.')
+            return redirect(url_for('confirm_fallback_tracks'))
+        
+        # Remove this song from pending tracks
+        pending_tracks.pop(song_index)
+        session['pending_tracks'] = pending_tracks
+        session.modified = True
+        
+        flash('Track skipped.')
+        
+        # Log skip
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"User skipped track: {pending_tracks[song_index]['original_song']['title']}\n")
+        
+        # If no more pending tracks, redirect to dashboard
+        if not pending_tracks:
+            return redirect(url_for('dashboard'))
+        else:
+            return redirect(url_for('confirm_fallback_tracks'))
+            
+    except Exception as e:
+        flash(f'Error skipping track: {str(e)}')
+        return redirect(url_for('confirm_fallback_tracks'))
 
 @app.route('/sync_cross_platform', methods=['POST'])
 @login_required

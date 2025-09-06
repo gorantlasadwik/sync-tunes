@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm Fallback Tracks{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>🎵 Confirm Fallback Tracks</h2>
+            <p class="text-muted">Some songs couldn't be found with the exact artist name. Please confirm which tracks you'd like to add to your playlist.</p>
+            
+            {% if pending_tracks %}
+                {% for song_index, song_data in enumerate(pending_tracks) %}
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-music"></i> 
+                            Original: "{{ song_data['original_song']['title'] }}" by {{ song_data['original_song']['artist'] }}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            <i class="fas fa-info-circle"></i> 
+                            We found these similar tracks on Spotify. Select the correct one or skip if none match:
+                        </p>
+                        
+                        <div class="row">
+                            {% for track_index, track in enumerate(song_data['fallback_tracks']) %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card border-primary">
+                                    <div class="card-body">
+                                        <h6 class="card-title text-primary">
+                                            <i class="fas fa-play-circle"></i> {{ track['name'] }}
+                                        </h6>
+                                        <p class="card-text">
+                                            <strong>Artist:</strong> {{ track['artist'] }}<br>
+                                            <strong>Album:</strong> {{ track['album'] }}
+                                        </p>
+                                        <form method="POST" action="{{ url_for('confirm_track') }}" class="d-inline">
+                                            <input type="hidden" name="track_index" value="{{ track_index }}">
+                                            <input type="hidden" name="song_index" value="{{ song_index }}">
+                                            <button type="submit" class="btn btn-success btn-sm">
+                                                <i class="fas fa-check"></i> Add This Track
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <div class="mt-3">
+                            <form method="POST" action="{{ url_for('skip_track') }}" class="d-inline">
+                                <input type="hidden" name="song_index" value="{{ song_index }}">
+                                <button type="submit" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> Skip This Song
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No pending tracks to confirm.
+                </div>
+            {% endif %}
+            
+            <div class="mt-4">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card-header.bg-warning {
+    background-color: #fff3cd !important;
+    border-color: #ffeaa7;
+}
+
+.card.border-primary {
+    border-color: #007bff !important;
+}
+
+.card.border-primary:hover {
+    box-shadow: 0 4px 8px rgba(0,123,255,0.2);
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+.btn-success:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(40,167,69,0.3);
+}
+
+.btn-secondary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(108,117,125,0.3);
+}
+</style>
+{% endblock %}

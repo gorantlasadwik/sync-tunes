@@ -1798,13 +1798,19 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                 # Check if we already have a Spotify track from hybrid parsing
                 if song_info.get('spotify_track'):
                     print(f"✅ Using pre-found Spotify track: {song_info['spotify_track']['name']}")
+                    print(f"🔍 Debug - Playlist ID: {playlist.platform_playlist_id}")
+                    print(f"🔍 Debug - Track URI: {song_info['spotify_track']['uri']}")
                     try:
-                        sp.playlist_add_items(playlist.platform_playlist_id, [song_info['spotify_track']['uri']])
+                        result = sp.playlist_add_items(playlist.platform_playlist_id, [song_info['spotify_track']['uri']])
                         songs_added += 1
-                        print(f"Auto-added good match: '{song_info['title']}' -> '{song_info['spotify_track']['name']}'")
+                        print(f"✅ Auto-added good match: '{song_info['title']}' -> '{song_info['spotify_track']['name']}'")
+                        print(f"🔍 Debug - Spotify API result: {result}")
                         continue
                     except Exception as e:
-                        print(f"Error adding pre-found track: {e}")
+                        print(f"❌ Error adding pre-found track: {e}")
+                        print(f"🔍 Debug - Playlist ID: {playlist.platform_playlist_id}")
+                        print(f"🔍 Debug - Track URI: {song_info['spotify_track']['uri']}")
+                        print(f"🔍 Debug - Error type: {type(e).__name__}")
                         # Continue to regular search
                 
                 # Check if manual selection is required

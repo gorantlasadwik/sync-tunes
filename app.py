@@ -9,9 +9,15 @@ import json
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
+import google.generativeai as genai
 
 # Load environment variables
 load_dotenv()
+
+# Configure Gemini API
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
@@ -303,16 +309,12 @@ def fetch_youtube_playlists(user_id, access_token):
                             snippet = item['snippet']
                             video_id = snippet['resourceId']['videoId']
                             
-                            # Parse YouTube title to extract clean song name and artist
+                            # Parse YouTube title using Gemini AI for intelligent extraction
                             raw_title = snippet.get('title', 'Unknown Title')
                             channel_title = snippet.get('videoOwnerChannelTitle', 'Unknown Artist')
                             
-                            # Use the parser to extract clean song name and artist
-                            parsed_song_name, parsed_artist = parse_youtube_title(raw_title)
-                            
-                            # If parsing didn't work well, fallback to channel title as artist
-                            if parsed_artist == "Unknown Artist" and channel_title != "Unknown Artist":
-                                parsed_artist = channel_title
+                            # Use Gemini AI to extract clean song name and artist
+                            parsed_song_name, parsed_artist = parse_youtube_title_with_gemini(raw_title, channel_title)
                             
                             # Log the parsing for debugging
                             print(f"YouTube title parsing: '{raw_title}' -> Song: '{parsed_song_name}', Artist: '{parsed_artist}'")
@@ -395,19 +397,78 @@ def create_spotify_playlist_api(access_token, name, description):
         print(f"Error creating Spotify playlist: {e}")
         return None
 
-def parse_youtube_title(title):
-    """Parse YouTube video title to extract clean song name and artist"""
+def parse_youtube_title_with_gemini(title, channel_title=None):
+    """Parse YouTube video title using Gemini AI to extract clean song name and artist"""
     if not title:
         return "Unknown Title", "Unknown Artist"
     
-    # Common patterns in YouTube music video titles
-    # Pattern 1: "Song Name - Artist Name - Movie/Album Name"
-    # Pattern 2: "Song Name | Artist Name | Movie Name"
-    # Pattern 3: "Song Name (Official Video) - Artist Name"
-    # Pattern 4: "Song Name - Artist Name [Lyrics]"
-    # Pattern 5: "Song Name - Artist Name - Lyrics Video"
+    # If Gemini API is not available, fallback to regex parser
+    if not GEMINI_API_KEY:
+        return parse_youtube_title_fallback(title, channel_title)
     
-    # Remove common suffixes/prefixes
+    try:
+        # Create Gemini model
+        model = genai.GenerativeModel('gemini-pro')
+        
+        # Create a detailed prompt for Gemini
+        prompt = f"""
+You are a music expert. Parse this YouTube video title and extract the most appropriate song name and artist name for music streaming platforms like Spotify.
+
+YouTube Title: "{title}"
+Channel Name: "{channel_title or 'Unknown'}"
+
+Rules:
+1. Extract the CLEAN song name (remove video descriptors like "Official Video", "Lyrics", "4K", "HD", "Full Song", etc.)
+2. Extract the MAIN artist name (not movie names, not multiple artists, just the primary artist)
+3. If the title contains movie/album names, ignore them
+4. If there are multiple artists, pick the most prominent one
+5. Keep song names concise and clean
+6. Use the channel name as artist if the title doesn't clearly indicate an artist
+
+Respond in this EXACT JSON format:
+{{
+    "song_name": "Clean Song Name",
+    "artist_name": "Primary Artist Name"
+}}
+
+Examples:
+- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → {{"song_name": "Badhulu Thochanai", "artist_name": "Mr. Perfect Songs"}}
+- "Tribute to Kalki 2898 Ad - Full Song | Prabhas | Amitabh Bachchan" → {{"song_name": "Tribute to Kalki 2898 Ad", "artist_name": "Prabhas"}}
+- "Song Name (Official Video) - Artist Name" → {{"song_name": "Song Name", "artist_name": "Artist Name"}}
+"""
+
+        # Get response from Gemini
+        response = model.generate_content(prompt)
+        
+        # Parse the JSON response
+        try:
+            result = json.loads(response.text.strip())
+            song_name = result.get('song_name', title).strip()
+            artist_name = result.get('artist_name', channel_title or 'Unknown Artist').strip()
+            
+            # Validate the results
+            if not song_name or song_name == "Unknown Title":
+                song_name = title
+            if not artist_name or artist_name == "Unknown Artist":
+                artist_name = channel_title or "Unknown Artist"
+            
+            print(f"Gemini parsing: '{title}' -> Song: '{song_name}', Artist: '{artist_name}'")
+            return song_name, artist_name
+            
+        except json.JSONDecodeError:
+            print(f"Gemini returned invalid JSON: {response.text}")
+            return parse_youtube_title_fallback(title, channel_title)
+            
+    except Exception as e:
+        print(f"Gemini API error: {e}")
+        return parse_youtube_title_fallback(title, channel_title)
+
+def parse_youtube_title_fallback(title, channel_title=None):
+    """Fallback regex-based parser when Gemini is not available"""
+    if not title:
+        return "Unknown Title", "Unknown Artist"
+    
+    # Simple regex-based parsing as fallback
     title = title.strip()
     
     # Remove common video descriptors
@@ -421,11 +482,8 @@ def parse_youtube_title(title):
     
     # Remove video descriptors (case insensitive)
     for descriptor in video_descriptors:
-        # Remove at the end
         title = re.sub(rf'\s*-\s*{re.escape(descriptor)}\s*$', '', title, flags=re.IGNORECASE)
-        # Remove in parentheses
         title = re.sub(rf'\s*\({re.escape(descriptor)}\)', '', title, flags=re.IGNORECASE)
-        # Remove in brackets
         title = re.sub(rf'\s*\[{re.escape(descriptor)}\]', '', title, flags=re.IGNORECASE)
     
     # Split by common separators
@@ -435,49 +493,17 @@ def parse_youtube_title(title):
         if sep in title:
             parts = [part.strip() for part in title.split(sep)]
             if len(parts) >= 2:
-                # First part is usually the song name
-                song_name = parts[0]
-                # Second part is usually the artist
-                artist_name = parts[1]
+                song_name = parts[0].strip()
+                artist_name = parts[1].strip()
                 
-                # Clean up the song name
-                song_name = re.sub(r'\s+', ' ', song_name).strip()
-                # Clean up the artist name
-                artist_name = re.sub(r'\s+', ' ', artist_name).strip()
-                
-                # If artist name is too long, it might be a movie name, try to extract artist
+                # If artist name is too long, it might be a movie name
                 if len(artist_name) > 50:
-                    # Look for common artist patterns
-                    artist_patterns = [
-                        r'^([^,]+)',  # Everything before first comma
-                        r'^([^-]+)',  # Everything before first dash
-                        r'^([^|]+)',  # Everything before first pipe
-                    ]
-                    
-                    for pattern in artist_patterns:
-                        match = re.match(pattern, artist_name)
-                        if match:
-                            artist_name = match.group(1).strip()
-                            break
+                    artist_name = artist_name.split(',')[0].strip()
                 
                 return song_name, artist_name
     
-    # If no separators found, try to extract from the title
-    # Look for patterns like "Song Name (Artist Name)" or "Song Name [Artist Name]"
-    parenthetical_match = re.match(r'^([^(]+)\s*\(([^)]+)\)', title)
-    if parenthetical_match:
-        song_name = parenthetical_match.group(1).strip()
-        artist_name = parenthetical_match.group(2).strip()
-        return song_name, artist_name
-    
-    bracket_match = re.match(r'^([^[]+)\s*\[([^\]]+)\]', title)
-    if bracket_match:
-        song_name = bracket_match.group(1).strip()
-        artist_name = bracket_match.group(2).strip()
-        return song_name, artist_name
-    
-    # If all else fails, use the whole title as song name
-    return title, "Unknown Artist"
+    # If no separators found, use the whole title as song name
+    return title, (channel_title or "Unknown Artist")
 
 def create_youtube_playlist_api(access_token, title, description):
     """Create a new YouTube playlist"""

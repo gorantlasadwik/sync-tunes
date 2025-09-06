@@ -411,6 +411,14 @@ def reset_gemini_quota():
     GEMINI_QUOTA_EXCEEDED = False
     print("🔄 Gemini quota flag reset - ready to use new API key")
 
+@app.route('/reset_gemini_quota', methods=['POST'])
+@login_required
+def reset_gemini_quota_route():
+    """Reset the Gemini quota flag"""
+    reset_gemini_quota()
+    flash('Gemini quota has been reset. You can now use advanced parsing features.')
+    return redirect(url_for('dashboard'))
+
 def parse_youtube_title_with_gemini(title, channel_title=None):
     """Parse YouTube video title using Gemini AI for intelligent extraction (for selected songs only)"""
     if not title:
@@ -953,6 +961,8 @@ def parse_youtube_title_fallback(title, channel_title=None):
     if not title:
         return "Unknown Title", "Unknown Artist"
     
+    print(f"Fallback parsing: '{title}'")
+    
     # Simple regex-based parsing as fallback
     title = title.strip()
     
@@ -962,7 +972,7 @@ def parse_youtube_title_fallback(title, channel_title=None):
         '4k', 'hd', 'hq', 'full song', 'complete song', 'extended',
         'remix', 'cover', 'acoustic', 'live', 'studio version',
         'with lyrics', 'lyrics video', 'music video', 'mv',
-        'tribute to', 'song with lyrics', 'songs', 'song'
+        'tribute to', 'song with lyrics', 'songs', 'song', 'full video song'
     ]
     
     # Remove video descriptors (case insensitive)
@@ -971,24 +981,56 @@ def parse_youtube_title_fallback(title, channel_title=None):
         title = re.sub(rf'\s*\({re.escape(descriptor)}\)', '', title, flags=re.IGNORECASE)
         title = re.sub(rf'\s*\[{re.escape(descriptor)}\]', '', title, flags=re.IGNORECASE)
     
-    # Split by common separators
-    separators = [' - ', ' | ', ' – ', ' — ']
+    # Handle specific patterns
+    # Pattern 1: "Artist - Song Name [Official Music Video]"
+    if ' - ' in title and '[' in title:
+        parts = title.split(' - ', 1)
+        if len(parts) == 2:
+            artist_name = parts[0].strip()
+            song_part = parts[1].strip()
+            # Remove brackets and their contents
+            song_name = re.sub(r'\s*\[.*?\]', '', song_part)
+            print(f"Pattern 1 match: Artist='{artist_name}', Song='{song_name}'")
+            return song_name, artist_name
     
-    for sep in separators:
-        if sep in title:
-            parts = [part.strip() for part in title.split(sep)]
-            if len(parts) >= 2:
-                song_name = parts[0].strip()
-                artist_name = parts[1].strip()
-                
-                # If artist name is too long, it might be a movie name
-                if len(artist_name) > 50:
-                    artist_name = artist_name.split(',')[0].strip()
-                
-                return song_name, artist_name
+    # Pattern 2: "Song Name | Movie Name | Artist | Music Director"
+    if ' | ' in title:
+        parts = [part.strip() for part in title.split(' | ')]
+        if len(parts) >= 3:
+            # First part is usually the song name
+            song_name = parts[0].strip()
+            # Look for artist in the parts (usually contains names)
+            artist_name = "Unknown Artist"
+            for part in parts[1:]:
+                # Skip movie names and technical terms
+                if not any(word in part.lower() for word in ['movie', 'film', 'video', 'song', 'music', 'director', 'composer']):
+                    if len(part.split()) <= 3:  # Likely a person's name
+                        artist_name = part
+                        break
+            print(f"Pattern 2 match: Song='{song_name}', Artist='{artist_name}'")
+            return song_name, artist_name
     
-    # If no separators found, use the whole title as song name
-    return title, (channel_title or "Unknown Artist")
+    # Pattern 3: "Artist - Song Name" (simple dash)
+    if ' - ' in title:
+        parts = [part.strip() for part in title.split(' - ', 1)]
+        if len(parts) == 2:
+            artist_name = parts[0].strip()
+            song_name = parts[1].strip()
+            print(f"Pattern 3 match: Artist='{artist_name}', Song='{song_name}'")
+            return song_name, artist_name
+    
+    # Pattern 4: "Song Name by Artist"
+    if ' by ' in title.lower():
+        parts = title.split(' by ', 1)
+        if len(parts) == 2:
+            song_name = parts[0].strip()
+            artist_name = parts[1].strip()
+            print(f"Pattern 4 match: Song='{song_name}', Artist='{artist_name}'")
+            return song_name, artist_name
+    
+    # If no pattern matches, return the cleaned title as song name
+    print(f"No pattern match, using title as song: '{title.strip()}'")
+    return title.strip(), (channel_title or "Unknown Artist")
 
 def create_youtube_playlist_api(access_token, title, description):
     """Create a new YouTube playlist"""

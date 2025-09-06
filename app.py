@@ -386,7 +386,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 if os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production':
     # Production - use HTTPS
     if os.getenv('RAILWAY_ENVIRONMENT'):
-        base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
+    base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
     elif os.getenv('RENDER'):
         base_url = os.getenv('RENDER_EXTERNAL_URL', 'https://sync-tunes.onrender.com')
     else:
@@ -1926,8 +1926,8 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         spotify_playlist_id = playlist.platform_playlist_id
                         if spotify_playlist_id:
                             print(f"Auto-adding good match: {track['name']}")
-                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
-                            songs_added += 1
+                    sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                    songs_added += 1
                             print(f"Successfully added '{song_info['title']}' to Spotify playlist")
                             
                             # Log success to file
@@ -1983,8 +1983,8 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         session.modified = True
                         print(f"Stored poor match for user confirmation: {track['name']}")
                         # Continue to fallback search
-                    else:
-                        print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
+                else:
+                    print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
                     # Try fallback search with Gemini re-analysis of full YouTube title
                     print(f"All strategies failed, asking Gemini to re-analyze full YouTube title...")
@@ -2615,7 +2615,7 @@ def spotify_callback():
         # Get user info from Spotify with error handling
         sp = spotipy.Spotify(auth=access_token)
         try:
-            user_info = sp.current_user()
+        user_info = sp.current_user()
             print(f"Spotify callback - user info: {user_info}")
         except Exception as e:
             print(f"Spotify callback error: {e}")
@@ -3182,9 +3182,11 @@ def sync_playlist_songs():
                         added_at=datetime.now().date()
                     )
                     db.session.add(playlist_song)
+                
+                # Always count as processed (whether new or existing)
                     songs_added += 1
                     synced_song_ids.append(song.song_id)  # Track this synced song
-                
+                    
                 # If syncing from YouTube to another platform, use hybrid approach
                 if source_platform.platform_name == 'YouTube' and platform.platform_name != 'YouTube':
                     # Get the original YouTube title from the platform song mapping
@@ -3238,13 +3240,13 @@ def sync_playlist_songs():
                                 })
                         else:
                             # Fallback to original song data
-                            songs_to_add_to_platform.append({
-                                'title': song.title,
-                                'artist': song.artist,
-                                'album': song.album,
-                                'duration': song.duration
-                            })
-                    else:
+                    songs_to_add_to_platform.append({
+                        'title': song.title,
+                        'artist': song.artist,
+                        'album': song.album,
+                        'duration': song.duration
+                    })
+                else:
                         # Fallback to original song data
                         songs_to_add_to_platform.append({
                             'title': song.title,
@@ -3260,6 +3262,10 @@ def sync_playlist_songs():
                         'album': song.album,
                         'duration': song.duration
                     })
+            else:
+                # Song doesn't exist in database - this shouldn't happen in normal operation
+                print(f"Warning: Song ID {song_id} not found in database")
+                continue
         
         # Commit database changes
         db.session.commit()

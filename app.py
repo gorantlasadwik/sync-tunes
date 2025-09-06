@@ -1385,20 +1385,47 @@ def sync_playlist_songs():
         target_playlist_id = request.form.get('target_playlist_id')
         song_ids = request.form.getlist('song_ids')
         
+        # Log validation step
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"Validation step - Source: {source_playlist_id}, Target: {target_playlist_id}, Songs: {song_ids}\n")
+        
         if not source_playlist_id or not target_playlist_id or not song_ids:
+            with open('/tmp/sync_debug.log', 'a') as f:
+                f.write("ERROR: Missing required parameters\n")
             flash('Please select source playlist, target playlist, and songs to sync.')
             return redirect(url_for('dashboard'))
         
+        # Log validation passed
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write("Validation passed - proceeding with sync\n")
+        
         # Verify ownership of both playlists
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write("Fetching playlists from database\n")
+        
         source_playlist = Playlist.query.get_or_404(source_playlist_id)
         target_playlist = Playlist.query.get_or_404(target_playlist_id)
+        
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"Source playlist: {source_playlist.name}, Target playlist: {target_playlist.name}\n")
+        
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write("Looking up user account\n")
         
         user_account = UserPlatformAccount.query.filter_by(
             user_id=current_user.user_id,
             account_id=source_playlist.account_id
         ).first()
         
+        with open('/tmp/sync_debug.log', 'a') as f:
+            f.write(f"User account found: {user_account is not None}\n")
+            if user_account:
+                f.write(f"Source account ID: {source_playlist.account_id}, Target account ID: {target_playlist.account_id}\n")
+                f.write(f"User account ID: {user_account.account_id}\n")
+        
         if not user_account or user_account.account_id != target_playlist.account_id:
+            with open('/tmp/sync_debug.log', 'a') as f:
+                f.write("ERROR: Access denied - account mismatch\n")
             flash('Access denied')
             return redirect(url_for('dashboard'))
         

@@ -956,10 +956,10 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     )
                     
                     # Confidence-based triage
-                    if overall_confidence >= 0.8:
+                    if overall_confidence >= 0.85:
                         match_quality = "HIGH"
                         is_good_match = True
-                    elif overall_confidence >= 0.6:
+                    elif overall_confidence >= 0.7:
                         match_quality = "MEDIUM"
                         is_good_match = True
                     elif overall_confidence >= 0.4:
@@ -979,30 +979,30 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         spotify_playlist_id = playlist.platform_playlist_id
                         if spotify_playlist_id:
                             print(f"Auto-adding good match: {track['name']}")
-                    sp.playlist_add_items(spotify_playlist_id, [track_uri])
-                    songs_added += 1
-                    print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                            sp.playlist_add_items(spotify_playlist_id, [track_uri])
+                            songs_added += 1
+                            print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                            
+                            # Log success to file
+                            with open('/tmp/sync_debug.log', 'a') as f:
+                                f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
                     
-                    # Log success to file
-                    with open('/tmp/sync_debug.log', 'a') as f:
-                        f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
-                    
-                    # Store user feedback for learning
-                    if song_info.get('original_title'):
-                        feedback = UserFeedback(
-                            user_id=current_user.user_id,
-                            original_youtube_title=song_info['original_title'],
-                            original_channel=song_info.get('channel_name'),
-                            corrected_song_name=track['name'],
-                            corrected_artist=track['artists'][0]['name'],
-                            corrected_album=track['album']['name'],
-                            spotify_uri=track['uri'],
-                            confidence_score=overall_confidence,
-                            feedback_type='confirmation'
-                        )
-                        db.session.add(feedback)
-                        db.session.commit()
-                    continue
+                        # Store user feedback for learning
+                        if song_info.get('original_title'):
+                            feedback = UserFeedback(
+                                user_id=current_user.user_id,
+                                original_youtube_title=song_info['original_title'],
+                                original_channel=song_info.get('channel_name'),
+                                corrected_song_name=track['name'],
+                                corrected_artist=track['artists'][0]['name'],
+                                corrected_album=track['album']['name'],
+                                spotify_uri=track['uri'],
+                                confidence_score=overall_confidence,
+                                feedback_type='confirmation'
+                            )
+                            db.session.add(feedback)
+                            db.session.commit()
+                        continue
                 else:
                     print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - trying fallback search")
                     # Store poor match for user confirmation

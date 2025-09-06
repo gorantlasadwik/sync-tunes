@@ -489,17 +489,32 @@ Respond in this EXACT JSON format:
 """
 
         # Get response from Groq
-        response = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            model="llama-3.1-70b-versatile",  # Using Llama 3.1 70B for best results
-            temperature=0.1,  # Low temperature for consistent parsing
-            max_tokens=200
-        )
+        try:
+            response = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                model="llama-3.3-70b-versatile",  # Using Llama 3.3 70B for best results
+                temperature=0.1,  # Low temperature for consistent parsing
+                max_tokens=200
+            )
+        except Exception as model_error:
+            print(f"Llama 3.3 70B model failed, trying Mixtral fallback: {model_error}")
+            # Fallback to Mixtral if Llama 3.3 70B is not available
+            response = client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                model="mixtral-8x7b-32768",  # Fallback to Mixtral
+                temperature=0.1,
+                max_tokens=200
+            )
         
         # Parse the response
         try:
@@ -592,7 +607,7 @@ Respond in this EXACT JSON format:
                     "content": prompt
                 }
             ],
-            model="llama-3.1-70b-versatile",
+            model="llama-3.3-70b-versatile",
             temperature=0.1,
             max_tokens=300
         )
@@ -706,7 +721,7 @@ Respond in this EXACT JSON format:
                     "content": prompt
                 }
             ],
-            model="llama-3.1-70b-versatile",
+            model="llama-3.3-70b-versatile",
             temperature=0.1,
             max_tokens=300
         )

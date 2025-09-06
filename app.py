@@ -59,7 +59,7 @@ SPOTIFY_CLIENT_SECRET = os.getenv('SPOTIFY_CLIENT_SECRET')
 if os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RENDER') or os.getenv('FLASK_ENV') == 'production':
     # Production - use HTTPS
     if os.getenv('RAILWAY_ENVIRONMENT'):
-    base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
+        base_url = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://your-app.railway.app')
     elif os.getenv('RENDER'):
         base_url = os.getenv('RENDER_EXTERNAL_URL', 'https://sync-tunes.onrender.com')
     else:
@@ -981,28 +981,28 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                             print(f"Auto-adding good match: {track['name']}")
                     sp.playlist_add_items(spotify_playlist_id, [track_uri])
                     songs_added += 1
-                            print(f"Successfully added '{song_info['title']}' to Spotify playlist")
-                            
-                            # Log success to file
-                            with open('/tmp/sync_debug.log', 'a') as f:
-                                f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
+                    print(f"Successfully added '{song_info['title']}' to Spotify playlist")
                     
-                        # Store user feedback for learning
-                        if song_info.get('original_title'):
-                            feedback = UserFeedback(
-                                user_id=current_user.user_id,
-                                original_youtube_title=song_info['original_title'],
-                                original_channel=song_info.get('channel_name'),
-                                corrected_song_name=track['name'],
-                                corrected_artist=track['artists'][0]['name'],
-                                corrected_album=track['album']['name'],
-                                spotify_uri=track['uri'],
-                                confidence_score=overall_confidence,
-                                feedback_type='confirmation'
-                            )
-                            db.session.add(feedback)
-                            db.session.commit()
-                        continue
+                    # Log success to file
+                    with open('/tmp/sync_debug.log', 'a') as f:
+                        f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
+                    
+                    # Store user feedback for learning
+                    if song_info.get('original_title'):
+                        feedback = UserFeedback(
+                            user_id=current_user.user_id,
+                            original_youtube_title=song_info['original_title'],
+                            original_channel=song_info.get('channel_name'),
+                            corrected_song_name=track['name'],
+                            corrected_artist=track['artists'][0]['name'],
+                            corrected_album=track['album']['name'],
+                            spotify_uri=track['uri'],
+                            confidence_score=overall_confidence,
+                            feedback_type='confirmation'
+                        )
+                        db.session.add(feedback)
+                        db.session.commit()
+                    continue
                 else:
                     print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - trying fallback search")
                     # Store poor match for user confirmation
@@ -1027,8 +1027,8 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         session.modified = True
                         print(f"Stored poor match for user confirmation: {track['name']}")
                         # Continue to fallback search
-                else:
-                    print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
+                    else:
+                        print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
                     # Try fallback search with Gemini re-analysis of full YouTube title
                     print(f"All strategies failed, asking Gemini to re-analyze full YouTube title...")
@@ -1695,7 +1695,7 @@ def spotify_callback():
         # Get user info from Spotify with error handling
         sp = spotipy.Spotify(auth=access_token)
         try:
-        user_info = sp.current_user()
+            user_info = sp.current_user()
             print(f"Spotify callback - user info: {user_info}")
         except Exception as e:
             print(f"Spotify callback error: {e}")
@@ -2339,7 +2339,7 @@ def sync_playlist_songs():
                             })
                     else:
                         # For other sync types, use original song data
-                    songs_to_add_to_platform.append({
+                        songs_to_add_to_platform.append({
                         'title': song.title,
                         'artist': song.artist,
                         'album': song.album,

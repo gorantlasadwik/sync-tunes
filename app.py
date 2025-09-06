@@ -497,6 +497,66 @@ def parse_youtube_title_for_sync(title, channel_title=None):
     """Parse YouTube video title using Gemini AI for selected songs during sync"""
     return parse_youtube_title_with_gemini(title, channel_title)
 
+def search_youtube_music_for_metadata(original_title, channel_title=None):
+    """Search YouTube Music for clean metadata using the original title"""
+    try:
+        from ytmusicapi import YTMusic
+        
+        # Initialize YouTube Music API
+        ytmusic = YTMusic()
+        
+        # Try multiple search strategies
+        search_queries = [
+            original_title,  # Original title
+            original_title.split(' - ')[-1] if ' - ' in original_title else original_title,  # After dash
+            original_title.split(' | ')[0] if ' | ' in original_title else original_title,  # Before pipe
+        ]
+        
+        best_result = None
+        best_confidence = 0.0
+        
+        for query in search_queries:
+            if not query.strip():
+                continue
+                
+            print(f"Searching YouTube Music for: '{query}'")
+            results = ytmusic.search(query, filter="songs", limit=3)
+            
+            if not results:
+                continue
+            
+            # Check each result for the best match
+            for result in results:
+                song_name = result.get('title', '')
+                artists = result.get('artists', [])
+                album = result.get('album', {}).get('name', '') if result.get('album') else ''
+                artist_name = artists[0].get('name', '') if artists else ''
+                
+                # Calculate confidence based on title similarity
+                title_similarity = fuzz.ratio(original_title.lower(), song_name.lower())
+                confidence = title_similarity / 100.0
+                
+                # Prefer results with higher confidence
+                if confidence > best_confidence:
+                    best_confidence = confidence
+                    best_result = {
+                        'song_name': song_name,
+                        'artist_name': artist_name,
+                        'album': album,
+                        'confidence': confidence
+                    }
+        
+        if best_result and best_confidence >= 0.5:  # Minimum 50% similarity
+            print(f"YouTube Music result: '{best_result['song_name']}' by '{best_result['artist_name']}' from '{best_result['album']}' (confidence: {best_result['confidence']:.2f})")
+            return best_result['song_name'], best_result['artist_name'], best_result['album'], best_result['confidence']
+        else:
+            print("No good matches found on YouTube Music")
+            return None, None, None, 0.0
+        
+    except Exception as e:
+        print(f"YouTube Music search error: {e}")
+        return None, None, None, 0.0
+
 def analyze_youtube_description(video_id, original_title, channel_title=None):
     """Analyze YouTube video description to extract correct song information"""
     if not GEMINI_API_KEY or GEMINI_QUOTA_EXCEEDED:
@@ -2288,48 +2348,68 @@ def sync_playlist_songs():
                                 original_title = original_title.replace("YouTube_ORIGINAL:", "")
                                 print(f"Found original YouTube title: '{original_title}'")
                                 
-                                # Step 1: Try YouTube description analysis first (most accurate)
-                                video_id = platform_song.platform_specific_id
-                                desc_song_name, desc_artist_name, desc_album_name, desc_confidence = analyze_youtube_description(
-                                    video_id, original_title, song.artist
+                                # Step 1: Try YouTube Music search first (most accurate)
+                                ytmusic_song_name, ytmusic_artist_name, ytmusic_album_name, ytmusic_confidence = search_youtube_music_for_metadata(
+                                    original_title, song.artist
                                 )
                                 
-                                if desc_song_name and desc_confidence >= 0.7:
-                                    # Use description analysis results (high confidence)
-                                    print(f"YouTube description analysis result: '{desc_song_name}' by '{desc_artist_name}' from '{desc_album_name}' (confidence: {desc_confidence:.2f})")
+                                if ytmusic_song_name and ytmusic_confidence >= 0.7:
+                                    # Use YouTube Music results (high confidence)
+                                    print(f"YouTube Music result: '{ytmusic_song_name}' by '{ytmusic_artist_name}' from '{ytmusic_album_name}' (confidence: {ytmusic_confidence:.2f})")
                                     
                                     songs_to_add_to_platform.append({
-                                        'title': desc_song_name,
-                                        'artist': desc_artist_name,
-                                        'album': desc_album_name,
+                                        'title': ytmusic_song_name,
+                                        'artist': ytmusic_artist_name,
+                                        'album': ytmusic_album_name,
                                         'original_title': original_title,
                                         'duration': song.duration,
-                                        'gemini_confidence': desc_confidence,
+                                        'gemini_confidence': ytmusic_confidence,
                                         'channel_name': song.artist,
-                                        'source': 'youtube_description'
+                                        'source': 'youtube_music'
                                     })
                                 else:
-                                    # Fallback to title parsing
-                                    print(f"Description analysis failed or low confidence ({desc_confidence:.2f}), trying title parsing...")
+                                    # Step 2: Try YouTube description analysis
+                                    video_id = platform_song.platform_specific_id
+                                    desc_song_name, desc_artist_name, desc_album_name, desc_confidence = analyze_youtube_description(
+                                        video_id, original_title, song.artist
+                                    )
                                     
-                                    # Step 2: Extract clean song name using Gemini
-                                    parsed_title, _ = parse_youtube_title_for_sync(original_title, song.artist)
-                                    
-                                    # Step 3: Get artist and album info using Gemini with confidence
-                                    artist_name, album_name, gemini_confidence = get_artist_and_album_info(parsed_title, original_title, song.artist)
-                                    
-                                    print(f"Gemini title parsing result: '{parsed_title}' by '{artist_name}' from '{album_name}' (confidence: {gemini_confidence:.2f})")
-                                    
-                                    songs_to_add_to_platform.append({
-                                        'title': parsed_title,
-                                        'artist': artist_name,
-                                        'album': album_name,
-                                        'original_title': original_title,
-                                        'duration': song.duration,
-                                        'gemini_confidence': gemini_confidence,
-                                        'channel_name': song.artist,
-                                        'source': 'title_parsing'
-                                    })
+                                    if desc_song_name and desc_confidence >= 0.7:
+                                        # Use description analysis results (high confidence)
+                                        print(f"YouTube description analysis result: '{desc_song_name}' by '{desc_artist_name}' from '{desc_album_name}' (confidence: {desc_confidence:.2f})")
+                                        
+                                        songs_to_add_to_platform.append({
+                                            'title': desc_song_name,
+                                            'artist': desc_artist_name,
+                                            'album': desc_album_name,
+                                            'original_title': original_title,
+                                            'duration': song.duration,
+                                            'gemini_confidence': desc_confidence,
+                                            'channel_name': song.artist,
+                                            'source': 'youtube_description'
+                                        })
+                                    else:
+                                        # Step 3: Fallback to title parsing
+                                        print(f"YouTube Music and description analysis failed, trying title parsing...")
+                                        
+                                        # Extract clean song name using Gemini
+                                        parsed_title, _ = parse_youtube_title_for_sync(original_title, song.artist)
+                                        
+                                        # Get artist and album info using Gemini with confidence
+                                        artist_name, album_name, gemini_confidence = get_artist_and_album_info(parsed_title, original_title, song.artist)
+                                        
+                                        print(f"Gemini title parsing result: '{parsed_title}' by '{artist_name}' from '{album_name}' (confidence: {gemini_confidence:.2f})")
+                                        
+                                        songs_to_add_to_platform.append({
+                                            'title': parsed_title,
+                                            'artist': artist_name,
+                                            'album': album_name,
+                                            'original_title': original_title,
+                                            'duration': song.duration,
+                                            'gemini_confidence': gemini_confidence,
+                                            'channel_name': song.artist,
+                                            'source': 'title_parsing'
+                                        })
                             else:
                                 # Fallback to stored song data
                                 print(f"No original title found, using stored data: '{song.title}' by '{song.artist}'")

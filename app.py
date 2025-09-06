@@ -309,15 +309,15 @@ def fetch_youtube_playlists(user_id, access_token):
                             snippet = item['snippet']
                             video_id = snippet['resourceId']['videoId']
                             
-                            # Parse YouTube title using Gemini AI for intelligent extraction
+                            # Parse YouTube title using fallback parser for bulk operations
                             raw_title = snippet.get('title', 'Unknown Title')
                             channel_title = snippet.get('videoOwnerChannelTitle', 'Unknown Artist')
                             
-                            # Use Gemini AI to extract clean song name and artist
-                            parsed_song_name, parsed_artist = parse_youtube_title_with_gemini(raw_title, channel_title)
+                            # Use fallback parser for bulk playlist fetching to avoid API limits
+                            parsed_song_name, parsed_artist = parse_youtube_title_fallback(raw_title, channel_title)
                             
                             # Log the parsing for debugging
-                            print(f"YouTube title parsing: '{raw_title}' -> Song: '{parsed_song_name}', Artist: '{parsed_artist}'")
+                            print(f"YouTube title parsing (bulk): '{raw_title}' -> Song: '{parsed_song_name}', Artist: '{parsed_artist}'")
                             
                             # Create or get song
                             song = Song.query.filter_by(
@@ -398,7 +398,7 @@ def create_spotify_playlist_api(access_token, name, description):
         return None
 
 def parse_youtube_title_with_gemini(title, channel_title=None):
-    """Parse YouTube video title using Gemini AI to extract clean song name and artist"""
+    """Parse YouTube video title using Gemini AI for intelligent extraction (for selected songs only)"""
     if not title:
         return "Unknown Title", "Unknown Artist"
     
@@ -408,7 +408,7 @@ def parse_youtube_title_with_gemini(title, channel_title=None):
     
     try:
         # Create Gemini model
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Create a detailed prompt for Gemini
         prompt = f"""
@@ -452,7 +452,7 @@ Examples:
             if not artist_name or artist_name == "Unknown Artist":
                 artist_name = channel_title or "Unknown Artist"
             
-            print(f"Gemini parsing: '{title}' -> Song: '{song_name}', Artist: '{artist_name}'")
+            print(f"Gemini parsing (selected): '{title}' -> Song: '{song_name}', Artist: '{artist_name}'")
             return song_name, artist_name
             
         except json.JSONDecodeError:
@@ -462,6 +462,10 @@ Examples:
     except Exception as e:
         print(f"Gemini API error: {e}")
         return parse_youtube_title_fallback(title, channel_title)
+
+def parse_youtube_title_for_sync(title, channel_title=None):
+    """Parse YouTube video title using Gemini AI for selected songs during sync"""
+    return parse_youtube_title_with_gemini(title, channel_title)
 
 def parse_youtube_title_fallback(title, channel_title=None):
     """Fallback regex-based parser when Gemini is not available"""
@@ -1572,8 +1576,12 @@ def sync_playlist_songs():
         # Get platform info for the target platform
         platform = db.session.get(Platform, target_user_account.platform_id)
         
+        # Get source playlist platform info
+        source_platform = db.session.get(Platform, user_account.platform_id)
+        
         with open('/tmp/sync_debug.log', 'a') as f:
             f.write(f"Target platform: {platform.platform_name if platform else 'None'}\n")
+            f.write(f"Source platform: {source_platform.platform_name if source_platform else 'None'}\n")
         
         # Sync songs to database first
         songs_added = 0
@@ -1602,12 +1610,39 @@ def sync_playlist_songs():
                     synced_song_ids.append(song.song_id)  # Track this synced song
                     
                     # Prepare for platform API call
-                    songs_to_add_to_platform.append({
-                        'title': song.title,
-                        'artist': song.artist,
-                        'album': song.album,
-                        'duration': song.duration
-                    })
+                    # If syncing from YouTube to another platform, use Gemini for better parsing
+                    if source_platform.platform_name == 'YouTube' and platform.platform_name != 'YouTube':
+                        # Get the original YouTube title from the platform song mapping
+                        platform_song = PlatformSong.query.filter_by(
+                            song_id=song.song_id,
+                            platform_id=source_platform.platform_id
+                        ).first()
+                        
+                        if platform_song:
+                            # Use Gemini to parse the original YouTube title for better results
+                            parsed_title, parsed_artist = parse_youtube_title_for_sync(song.title, song.artist)
+                            songs_to_add_to_platform.append({
+                                'title': parsed_title,
+                                'artist': parsed_artist,
+                                'album': song.album,
+                                'duration': song.duration
+                            })
+                        else:
+                            # Fallback to original song data
+                            songs_to_add_to_platform.append({
+                                'title': song.title,
+                                'artist': song.artist,
+                                'album': song.album,
+                                'duration': song.duration
+                            })
+                    else:
+                        # For other sync types, use original song data
+                        songs_to_add_to_platform.append({
+                            'title': song.title,
+                            'artist': song.artist,
+                            'album': song.album,
+                            'duration': song.duration
+                        })
                 else:
                     songs_skipped += 1
         

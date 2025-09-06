@@ -457,14 +457,12 @@ Respond with ONLY the clean song name, nothing else.
         except Exception as e:
             if "quota" in str(e).lower() or "429" in str(e):
                 print(f"Gemini API quota exceeded for title parsing: {e}")
-                global GEMINI_QUOTA_EXCEEDED
-                GEMINI_QUOTA_EXCEEDED = True
                 # Fallback to simple title cleaning
-                return clean_title_for_search(title), None
+                return parse_youtube_title_fallback(title, channel_title)
             else:
                 print(f"Gemini API error for title parsing: {e}")
                 # Fallback to simple title cleaning
-                return clean_title_for_search(title), None
+                return parse_youtube_title_fallback(title, channel_title)
         
         # Parse the response (just song name)
         try:

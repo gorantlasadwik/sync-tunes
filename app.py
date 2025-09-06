@@ -431,17 +431,19 @@ SEARCH INSTRUCTIONS:
 
 IMPORTANT RULES:
 - Extract the CLEAN song name (remove "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", etc.)
-- Find the ACTUAL ARTIST (singer/music director, not channel names or actors)
-- For Indian movies: Look for music directors like "DSP", "Devi Sri Prasad", "A.R. Rahman", "Anirudh"
+- Find the ACTUAL SINGER/VOCALIST (not music directors, channel names, or actors)
+- For Spotify search, we need the SINGER'S NAME, not the music director
+- For Indian movies: Look for singers like "Arijit Singh", "Karthik", "Shreya Ghoshal", "Sid Sriram"
+- Music directors like "DSP", "Devi Sri Prasad", "A.R. Rahman" are NOT the singers
 - Actor names like "Prabhas", "Kajal Aggarwal" are usually not the singers
-- Use web search to verify the correct artist information
+- Use web search to find the actual vocalist who sang the song
 
 SEARCH QUERIES TO USE (in this order):
-1. Search: "[song name] [movie name] singer artist"
-2. Search: "[song name] [movie name] who sang"
-3. Search: "[song name] [movie name] music director"
-4. Search: "[song name] official music video"
-5. Search: "[song name] spotify artist"
+1. Search: "[song name] [movie name] who sang singer"
+2. Search: "[song name] [movie name] vocalist"
+3. Search: "[song name] [movie name] singer name"
+4. Search: "[song name] official music video singer"
+5. Search: "[song name] spotify who sang"
 
 VERIFICATION STEPS:
 - Cross-check multiple sources
@@ -456,7 +458,7 @@ Respond in this EXACT JSON format:
 }}
 
 EXAMPLES:
-- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → Search for "Badhulu Thochanai song singer" → {{"song_name": "Badhulu Thochanai", "artist_name": "DSP"}}
+- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → Search for "Badhulu Thochanai who sang singer" → {{"song_name": "Badhulu Thochanai", "artist_name": "Karthik"}}
 - "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → Search for "Kanulanu Thaake Manam who sang" → {{"song_name": "Kanulanu Thaake", "artist_name": "Arijit Singh"}}
 
 Use web search to find the most accurate information possible.

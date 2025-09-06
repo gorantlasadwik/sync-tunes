@@ -499,6 +499,8 @@ def parse_youtube_title_for_sync(title, channel_title=None):
 
 def get_spotify_song_name_from_youtube_url(video_id, original_title, channel_title=None):
     """Use Gemini with YouTube video URL to get the exact Spotify song name"""
+    global GEMINI_QUOTA_EXCEEDED
+    
     if not GEMINI_API_KEY or GEMINI_QUOTA_EXCEEDED:
         return None, None, None, 0.0
     
@@ -549,7 +551,6 @@ Respond in this EXACT JSON format:
         except Exception as e:
             if "quota" in str(e).lower() or "429" in str(e):
                 print(f"Gemini API quota exceeded for URL analysis: {e}")
-                global GEMINI_QUOTA_EXCEEDED
                 GEMINI_QUOTA_EXCEEDED = True
                 return None, None, None, 0.0
             else:

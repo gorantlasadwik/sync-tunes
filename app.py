@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from thefuzz import fuzz
 from groq import Groq
-import re
 
 # Load environment variables
 load_dotenv()
@@ -429,8 +428,10 @@ def parse_youtube_title_with_groq(title, channel_title=None):
         return parse_youtube_title_fallback(title, channel_title)
     
     try:
-        # Initialize Groq client
+        # Initialize Groq client with clean configuration
+        print(f"Initializing Groq client with API key: {GROQ_API_KEY[:10]}...")
         client = Groq(api_key=GROQ_API_KEY)
+        print("Groq client initialized successfully")
         
         # Enhanced prompt for Groq
         prompt = f"""
@@ -516,8 +517,10 @@ def get_spotify_song_name_from_youtube_url_groq(video_id, original_title, channe
         return None, None, None, 0.0
     
     try:
-        # Initialize Groq client
+        # Initialize Groq client with clean configuration
+        print(f"Initializing Groq client with API key: {GROQ_API_KEY[:10]}...")
         client = Groq(api_key=GROQ_API_KEY)
+        print("Groq client initialized successfully")
         
         # Create YouTube video URL
         youtube_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -612,8 +615,10 @@ def analyze_youtube_description_groq(video_id, original_title, channel_title=Non
         return None, None, None, 0.0
     
     try:
-        # Initialize Groq client
+        # Initialize Groq client with clean configuration
+        print(f"Initializing Groq client with API key: {GROQ_API_KEY[:10]}...")
         client = Groq(api_key=GROQ_API_KEY)
+        print("Groq client initialized successfully")
         
         # Fetch video description using YouTube API
         if not YOUTUBE_API_KEY:

@@ -715,9 +715,18 @@ def advanced_fuzzy_match(song_title, artist_name, spotify_track):
     # 5. Channel-based confidence boost
     channel_boost = 0.1 if spotify_track.get('album', {}).get('name', '').lower() in ['t-series', 'sony music', 'zee music'] else 0
     
-    # Calculate composite score
-    title_score = max(title_token_ratio, title_partial_ratio, title_simple_ratio) / 100
-    artist_score = max(artist_token_ratio, artist_partial_ratio, artist_simple_ratio) / 100 if artist_name else 0.5
+    # Calculate composite score with stricter matching
+    # Use simple ratio as primary, with token ratio as secondary
+    title_score = (title_simple_ratio * 0.7 + title_token_ratio * 0.3) / 100
+    artist_score = (artist_simple_ratio * 0.7 + artist_token_ratio * 0.3) / 100 if artist_name else 0.5
+    
+    # Penalize partial matches that are too different
+    if title_partial_ratio > 0 and title_simple_ratio < 50:
+        title_score *= 0.5  # Reduce score for partial matches that are very different
+    
+    # Additional check: if titles are completely different, heavily penalize
+    if title_simple_ratio < 30 and title_token_ratio < 30:
+        title_score *= 0.2  # Heavily penalize completely different titles
     
     # Weighted composite score
     composite_score = (
@@ -971,6 +980,7 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     
                     print(f"Advanced validation ({used_strategy}): '{song_info['title']}' vs '{track['name']}'")
                     print(f"Fuzzy scores: {fuzzy_scores}")
+                    print(f"Title similarity: {fuzzy_scores.get('title_simple_ratio', 0)}% simple, {fuzzy_scores.get('title_token_ratio', 0)}% token")
                     print(f"Overall confidence: {overall_confidence:.3f} ({match_quality})")
                     print(f"Good match: {is_good_match}")
                     

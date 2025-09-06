@@ -1805,6 +1805,14 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         songs_added += 1
                         print(f"✅ Auto-added good match: '{song_info['title']}' -> '{song_info['spotify_track']['name']}'")
                         print(f"🔍 Debug - Spotify API result: {result}")
+                        
+                        # Verify the song was actually added by checking playlist
+                        try:
+                            playlist_tracks = sp.playlist_tracks(playlist.platform_playlist_id, limit=1, offset=0)
+                            print(f"🔍 Debug - Playlist now has {playlist_tracks['total']} tracks")
+                        except Exception as verify_error:
+                            print(f"🔍 Debug - Could not verify playlist: {verify_error}")
+                        
                         continue
                     except Exception as e:
                         print(f"❌ Error adding pre-found track: {e}")
@@ -2151,6 +2159,13 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                 with open('/tmp/sync_debug.log', 'a') as f:
                     f.write(f"Error adding song '{song_info['title']}' to Spotify: {song_error}\n")
                 continue
+        
+        # Final verification - check total tracks in playlist
+        try:
+            final_playlist_check = sp.playlist_tracks(playlist.platform_playlist_id, limit=1, offset=0)
+            print(f"🔍 FINAL VERIFICATION - Playlist '{playlist.name}' now has {final_playlist_check['total']} total tracks")
+        except Exception as final_error:
+            print(f"🔍 FINAL VERIFICATION - Could not check final playlist count: {final_error}")
         
         return songs_added
         
@@ -3367,9 +3382,9 @@ def sync_playlist_songs():
         
         if songs_added > 0:
             if platform_songs_added > 0:
-                flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist.')
+                flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist. Note: Spotify UI may take a few minutes to update.')
             else:
-                flash(f'Successfully synced {songs_added} songs! All songs were automatically added to {platform.platform_name} playlist.')
+                flash(f'Successfully synced {songs_added} songs! All songs were automatically added to {platform.platform_name} playlist. Note: Spotify UI may take a few minutes to update.')
         elif songs_skipped > 0:
             flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist.')
         else:

@@ -319,6 +319,9 @@ def fetch_youtube_playlists(user_id, access_token):
                             # Log the parsing for debugging
                             print(f"YouTube title parsing (bulk): '{raw_title}' -> Song: '{parsed_song_name}', Artist: '{parsed_artist}'")
                             
+                            # Store the original YouTube title in the song's album field for later Gemini parsing
+                            # This way we can access it during sync without changing the database schema
+                            
                             # Create or get song
                             song = Song.query.filter_by(
                                 title=parsed_song_name,
@@ -329,7 +332,7 @@ def fetch_youtube_playlists(user_id, access_token):
                                 song = Song(
                                     title=parsed_song_name,
                                     artist=parsed_artist,
-                                    album='YouTube',
+                                    album=f"YouTube_ORIGINAL:{raw_title}",  # Store original title for Gemini parsing
                                     duration=0
                                 )
                                 db.session.add(song)
@@ -1648,14 +1651,32 @@ def sync_playlist_songs():
                         ).first()
                         
                         if platform_song:
-                            # Use Gemini to parse the original YouTube title for better results
-                            parsed_title, parsed_artist = parse_youtube_title_for_sync(song.title, song.artist)
-                            songs_to_add_to_platform.append({
-                                'title': parsed_title,
-                                'artist': parsed_artist,
-                                'album': song.album,
-                                'duration': song.duration
-                            })
+                            # Extract the original YouTube title from the album field
+                            original_title = song.album
+                            if original_title.startswith("YouTube_ORIGINAL:"):
+                                original_title = original_title.replace("YouTube_ORIGINAL:", "")
+                                print(f"Found original YouTube title: '{original_title}'")
+                                
+                                # Use Gemini to parse the original YouTube title for better results
+                                parsed_title, parsed_artist = parse_youtube_title_for_sync(original_title, song.artist)
+                                
+                                print(f"Gemini parsed result: '{parsed_title}' by '{parsed_artist}'")
+                                
+                                songs_to_add_to_platform.append({
+                                    'title': parsed_title,
+                                    'artist': parsed_artist,
+                                    'album': 'YouTube',
+                                    'duration': song.duration
+                                })
+                            else:
+                                # Fallback to stored song data
+                                print(f"No original title found, using stored data: '{song.title}' by '{song.artist}'")
+                                songs_to_add_to_platform.append({
+                                    'title': song.title,
+                                    'artist': song.artist,
+                                    'album': song.album,
+                                    'duration': song.duration
+                                })
                         else:
                             # Fallback to original song data
                             songs_to_add_to_platform.append({

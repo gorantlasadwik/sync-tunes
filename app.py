@@ -2646,20 +2646,22 @@ def confirm_track():
     """Confirm a fallback track selection"""
     try:
         track_index = int(request.form.get('track_index'))
-        song_index = int(request.form.get('song_index'))
         
         pending_tracks = session.get('pending_tracks', [])
-        if song_index >= len(pending_tracks):
-            flash('Invalid song selection.')
-            return redirect(url_for('confirm_fallback_tracks'))
-        
-        song_data = pending_tracks[song_index]
-        if track_index >= len(song_data['fallback_tracks']):
+        if track_index >= len(pending_tracks):
             flash('Invalid track selection.')
             return redirect(url_for('confirm_fallback_tracks'))
         
-        selected_track = song_data['fallback_tracks'][track_index]
-        playlist_id = song_data['playlist_id']
+        track_data = pending_tracks[track_index]
+        if not track_data['spotify_track']:
+            flash('No track to add.')
+            return redirect(url_for('confirm_fallback_tracks'))
+        
+        selected_track = track_data['spotify_track']
+        song_info = track_data['song_info']
+        
+        # Get playlist ID from the song info or use a default
+        playlist_id = song_info.get('playlist_id')
         
         # Add the selected track to Spotify playlist
         try:
@@ -2727,15 +2729,15 @@ def confirm_track():
 def skip_track():
     """Skip a fallback track (don't add to playlist)"""
     try:
-        song_index = int(request.form.get('song_index'))
+        track_index = int(request.form.get('track_index'))
         
         pending_tracks = session.get('pending_tracks', [])
-        if song_index >= len(pending_tracks):
-            flash('Invalid song selection.')
+        if track_index >= len(pending_tracks):
+            flash('Invalid track selection.')
             return redirect(url_for('confirm_fallback_tracks'))
         
-        # Remove this song from pending tracks
-        pending_tracks.pop(song_index)
+        # Remove this track from pending tracks
+        pending_tracks.pop(track_index)
         session['pending_tracks'] = pending_tracks
         session.modified = True
         
@@ -2743,7 +2745,7 @@ def skip_track():
         
         # Log skip
         with open('/tmp/sync_debug.log', 'a') as f:
-            f.write(f"User skipped track: {pending_tracks[song_index]['original_song']['title']}\n")
+            f.write(f"User skipped track: {track_data['song_info']['title']}\n")
         
         # If no more pending tracks, redirect to dashboard
         if not pending_tracks:

@@ -17,7 +17,7 @@
                     <div class="card-header bg-warning text-dark">
                         <h5 class="mb-0">
                             <i class="fas fa-music"></i> 
-                            Original: "{{ track_data['song_info']['original_title'] }}" by {{ track_data['song_info']['artist'] }}
+                            Original: "{{ track_data['song_info'].get('original_title', track_data['song_info']['title']) }}" by {{ track_data['song_info']['artist'] }}
                         </h5>
                     </div>
                     <div class="card-body">
@@ -28,6 +28,7 @@
                             </p>
                             
                             <!-- Title Comparison Section -->
+                            {% if track_data.get('title_comparison') %}
                             <div class="alert alert-info mb-3">
                                 <h6><i class="fas fa-balance-scale"></i> Title Comparison:</h6>
                                 <div class="row">
@@ -52,6 +53,7 @@
                                     {% endif %}
                                 </div>
                             </div>
+                            {% endif %}
                             
                             <!-- Track Details -->
                             <div class="card border-primary">

@@ -671,30 +671,8 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                                 f.write(f"Auto-added good match: '{song_info['title']}' -> '{track['name']}'\n")
                         continue
                     else:
-                        print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - storing for user confirmation")
-                        
-                        # Store the poor match for user confirmation instead of auto-adding
-                        poor_match_track = {
-                            'name': track['name'],
-                            'artist': track['artists'][0]['name'],
-                            'uri': track['uri'],
-                            'album': track['album']['name'],
-                            'is_poor_match': True
-                        }
-                        
-                        # Store in session for user confirmation
-                        if 'pending_tracks' not in session:
-                            session['pending_tracks'] = []
-                        
-                        session['pending_tracks'].append({
-                            'original_song': song_info,
-                            'fallback_tracks': [poor_match_track],
-                            'playlist_id': playlist.platform_playlist_id
-                        })
-                        session.modified = True
-                        
-                        print(f"Stored poor match for user confirmation: {track['name']}")
-                        continue
+                        print(f"Found track but poor match: '{track['name']}' vs '{song_info['title']}' - trying fallback search")
+                        # Fall through to fallback search instead of storing poor matches
                 else:
                     print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
@@ -705,7 +683,10 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         f'track:"{song_info["title"]}"',  # Exact phrase match
                         f'track:{song_info["title"]}',    # Standard search
                         f'"{song_info["title"]}"',        # Phrase search
-                        f'{song_info["title"]}'           # Simple search
+                        f'{song_info["title"]}',          # Simple search
+                        f'{song_info["title"]} song',     # Add "song" keyword
+                        f'{song_info["title"]} music',    # Add "music" keyword
+                        f'{song_info["title"]} audio'     # Add "audio" keyword
                     ]
                     
                     fallback_results = None
@@ -753,7 +734,7 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                                 best_score = score
                                 best_track = track
                         
-                        # Store all fallback results for user confirmation instead of auto-adding
+                        # Store only meaningful fallback results for user confirmation
                         fallback_tracks = []
                         for track in fallback_results['tracks']['items']:
                             track_name_lower = track['name'].lower()
@@ -774,36 +755,49 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                             # Calculate overall score
                             score = word_overlap_ratio + (1.0 if contains_match else 0.0)
                             
-                            fallback_tracks.append({
-                                'name': track['name'],
-                                'artist': track['artists'][0]['name'],
-                                'uri': track['uri'],
-                                'album': track['album']['name'],
-                                'score': score,
-                                'is_fallback': True
-                            })
+                            # Only include tracks with some meaningful overlap (at least 20%)
+                            if score >= 0.2 or contains_match:
+                                fallback_tracks.append({
+                                    'name': track['name'],
+                                    'artist': track['artists'][0]['name'],
+                                    'uri': track['uri'],
+                                    'album': track['album']['name'],
+                                    'score': score,
+                                    'is_fallback': True
+                                })
+                                print(f"Including fallback track: '{track['name']}' (score: {score:.2f})")
+                            else:
+                                print(f"Rejecting fallback track: '{track['name']}' (score: {score:.2f}) - too low")
                         
                         # Sort by score (highest first)
                         fallback_tracks.sort(key=lambda x: x['score'], reverse=True)
                         
-                        # Store in session for user confirmation
-                        if 'pending_tracks' not in session:
-                            session['pending_tracks'] = []
-                        
-                        session['pending_tracks'].append({
-                            'original_song': song_info,
-                            'fallback_tracks': fallback_tracks,
-                            'playlist_id': playlist.platform_playlist_id
-                        })
-                        session.modified = True
-                        
-                        print(f"Stored {len(fallback_tracks)} fallback tracks for user confirmation")
-                        
-                        # Log fallback results to file
-                        with open('/tmp/sync_debug.log', 'a') as f:
-                            f.write(f"Fallback search found {len(fallback_tracks)} tracks for '{song_info['title']}'\n")
-                            for track in fallback_tracks:
-                                f.write(f"  - {track['name']} by {track['artist']} (Score: {track['score']:.2f})\n")
+                        # Only store if we found meaningful fallback results
+                        if fallback_tracks:
+                            # Store in session for user confirmation
+                            if 'pending_tracks' not in session:
+                                session['pending_tracks'] = []
+                            
+                            session['pending_tracks'].append({
+                                'original_song': song_info,
+                                'fallback_tracks': fallback_tracks,
+                                'playlist_id': playlist.platform_playlist_id
+                            })
+                            session.modified = True
+                            
+                            print(f"Stored {len(fallback_tracks)} meaningful fallback tracks for user confirmation")
+                            
+                            # Log fallback results to file
+                            with open('/tmp/sync_debug.log', 'a') as f:
+                                f.write(f"Fallback search found {len(fallback_tracks)} meaningful tracks for '{song_info['title']}'\n")
+                                for track in fallback_tracks:
+                                    f.write(f"  - {track['name']} by {track['artist']} (Score: {track['score']:.2f})\n")
+                        else:
+                            print(f"No meaningful fallback results found for '{song_info['title']}' - skipping")
+                            
+                            # Log no meaningful results
+                            with open('/tmp/sync_debug.log', 'a') as f:
+                                f.write(f"No meaningful fallback results found for '{song_info['title']}'\n")
                     else:
                         print(f"No tracks found even with fallback search for: {song_info['title']}")
                         

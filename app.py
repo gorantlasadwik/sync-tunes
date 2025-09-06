@@ -548,19 +548,35 @@ def create_youtube_playlist_api(access_token, title, description):
 
 def update_spotify_playlist(access_token, playlist, songs_to_add):
     """Update a Spotify playlist with new songs"""
+    print(f"=== update_spotify_playlist CALLED ===")
+    print(f"Playlist: {playlist.name}")
+    print(f"Songs to add: {len(songs_to_add)}")
+    
+    # Log to file for better debugging
+    with open('/tmp/sync_debug.log', 'a') as f:
+        f.write(f"=== update_spotify_playlist CALLED ===\n")
+        f.write(f"Playlist: {playlist.name}\n")
+        f.write(f"Songs to add: {len(songs_to_add)}\n")
+    
     try:
         sp = spotipy.Spotify(auth=access_token)
         songs_added = 0
         
         for song_info in songs_to_add:
             try:
+                print(f"Searching Spotify for: '{song_info['title']}' by '{song_info['artist']}'")
+                
                 # Search for the song on Spotify
                 search_query = f"track:{song_info['title']} artist:{song_info['artist']}"
+                print(f"Search query: {search_query}")
+                
                 results = sp.search(q=search_query, type='track', limit=1)
+                print(f"Search results: {len(results['tracks']['items'])} tracks found")
                 
                 if results['tracks']['items']:
                     track = results['tracks']['items'][0]
                     track_uri = track['uri']
+                    print(f"Found track: {track['name']} by {track['artists'][0]['name']} - URI: {track_uri}")
                     
                     # Add track to playlist
                     spotify_playlist_id = playlist.platform_playlist_id
@@ -568,14 +584,27 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         print(f"ERROR: No Spotify playlist ID found for playlist '{playlist.name}'")
                         continue
                     
+                    print(f"Adding track to Spotify playlist: {spotify_playlist_id}")
                     sp.playlist_add_items(spotify_playlist_id, [track_uri])
                     songs_added += 1
-                    print(f"Added '{song_info['title']}' to Spotify playlist")
+                    print(f"Successfully added '{song_info['title']}' to Spotify playlist")
+                    
+                    # Log success to file
+                    with open('/tmp/sync_debug.log', 'a') as f:
+                        f.write(f"Successfully added '{song_info['title']}' to Spotify playlist\n")
                 else:
                     print(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}")
                     
+                    # Log no results to file
+                    with open('/tmp/sync_debug.log', 'a') as f:
+                        f.write(f"No Spotify track found for: {song_info['title']} by {song_info['artist']}\n")
+                    
             except Exception as song_error:
                 print(f"Error adding song '{song_info['title']}' to Spotify: {song_error}")
+                
+                # Log error to file
+                with open('/tmp/sync_debug.log', 'a') as f:
+                    f.write(f"Error adding song '{song_info['title']}' to Spotify: {song_error}\n")
                 continue
         
         return songs_added

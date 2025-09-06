@@ -424,13 +424,16 @@ TASK: Search the web to find the real song name and artist information for this 
 
 SEARCH INSTRUCTIONS:
 1. Search for the song using the YouTube title to find official music information
-2. Look for the actual song name (clean, without video descriptors)
-3. Find the real artist/singer/music director (not actors or channel names)
-4. Verify the information from reliable music sources like Spotify, Apple Music, or official music websites
-5. For Indian movie songs, prioritize the music director/singer over actors
+2. Look for the actual song name (clean, without video descriptors or movie names)
+3. For titles with ":" or "||", the part before is usually the song name
+4. Find the real artist/singer/music director (not actors or channel names)
+5. Verify the information from reliable music sources like Spotify, Apple Music, or official music websites
+6. For Indian movie songs, prioritize the music director/singer over actors
 
 IMPORTANT RULES:
-- Extract the CLEAN song name (remove "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", etc.)
+- Extract the CLEAN SONG NAME (not album/movie names)
+- Remove "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", "Full Video Songs", etc.
+- For titles like "Song Name : Movie Name", extract ONLY the song name part
 - Find the ACTUAL SINGER/VOCALIST (not music directors, channel names, or actors)
 - For Spotify search, we need the SINGER'S NAME, not the music director
 - For Indian movies: Look for singers like "Arijit Singh", "Karthik", "Shreya Ghoshal", "Sid Sriram"
@@ -460,6 +463,7 @@ Respond in this EXACT JSON format:
 EXAMPLES:
 - "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → Search for "Badhulu Thochanai who sang singer" → {{"song_name": "Badhulu Thochanai", "artist_name": "Karthik"}}
 - "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → Search for "Kanulanu Thaake Manam who sang" → {{"song_name": "Kanulanu Thaake", "artist_name": "Arijit Singh"}}
+- "Yenno Yenno : Malli Malli Idi Rani Roju Full Video Songs" → Search for "Yenno Yenno who sang singer" → {{"song_name": "Yenno Yenno", "artist_name": "Mohit Chauhan"}}
 
 Use web search to find the most accurate information possible.
 """

@@ -11,74 +11,34 @@
             <p class="text-muted">Some songs couldn't be found with the exact artist name. Please confirm which tracks you'd like to add to your playlist.</p>
             
             {% if pending_tracks %}
+                <p class="text-info">Found {{ pending_tracks|length }} pending tracks</p>
                 {% for track_data in pending_tracks %}
                 {% set track_index = loop.index0 %}
                 <div class="card mb-4">
                     <div class="card-header bg-warning text-dark">
                         <h5 class="mb-0">
                             <i class="fas fa-music"></i> 
-                            Original: "{{ track_data['song_info'].get('original_title', track_data['song_info']['title']) }}" by {{ track_data['song_info']['artist'] }}
+                            Track {{ track_index + 1 }}
                         </h5>
                     </div>
                     <div class="card-body">
-                        {% if track_data['spotify_track'] %}
-                            <p class="text-muted mb-3">
-                                <i class="fas fa-info-circle"></i> 
-                                We found this track on Spotify. Compare the titles and select if it matches:
-                            </p>
-                            
-                            <!-- Title Comparison Section -->
-                            {% if track_data.get('title_comparison') %}
-                            <div class="alert alert-info mb-3">
-                                <h6><i class="fas fa-balance-scale"></i> Title Comparison:</h6>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <strong>YouTube Title:</strong><br>
-                                        <span class="text-primary">{{ track_data['title_comparison']['original_youtube_title'] }}</span>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <strong>Spotify Title:</strong><br>
-                                        <span class="text-success">{{ track_data['title_comparison']['spotify_title'] }}</span>
-                                    </div>
-                                </div>
-                                <div class="mt-2">
-                                    <strong>Similarity:</strong> 
-                                    <span class="badge {% if track_data['title_comparison']['is_similar'] %}bg-success{% else %}bg-warning{% endif %}">
-                                        {{ track_data['title_comparison']['similarity_percentage'] }}%
-                                    </span>
-                                    {% if track_data['title_comparison']['is_similar'] %}
-                                        <span class="text-success ms-2"><i class="fas fa-check-circle"></i> Similar titles - likely a match</span>
-                                    {% else %}
-                                        <span class="text-warning ms-2"><i class="fas fa-exclamation-triangle"></i> Different titles - check carefully</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endif %}
-                            
-                            <!-- Track Details -->
-                            <div class="card border-primary">
-                                <div class="card-body">
-                                    <h6 class="card-title text-primary">
-                                        <i class="fas fa-play-circle"></i> {{ track_data['spotify_track']['name'] }}
-                                        <span class="badge bg-info ms-2">Confidence: {{ "%.1f"|format(track_data['confidence'] * 100) }}%</span>
-                                    </h6>
-                                    <p class="card-text">
-                                        <strong>Artist:</strong> {{ track_data['spotify_track']['artists'][0]['name'] }}<br>
-                                        <strong>Album:</strong> {{ track_data['spotify_track']['album']['name'] }}
-                                    </p>
-                                    <form method="POST" action="{{ url_for('confirm_track') }}" class="d-inline">
-                                        <input type="hidden" name="track_index" value="{{ track_index }}">
-                                        <button type="submit" class="btn btn-success btn-sm">
-                                            <i class="fas fa-check"></i> Add This Track
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
+                        <p><strong>Debug Info:</strong></p>
+                        <pre>{{ track_data | tojson(indent=2) }}</pre>
+                        
+                        {% if track_data.get('song_info') %}
+                            <p><strong>Song Info:</strong> {{ track_data['song_info'].get('title', 'No title') }}</p>
+                        {% endif %}
+                        
+                        {% if track_data.get('spotify_track') %}
+                            <p><strong>Spotify Track:</strong> {{ track_data['spotify_track'].get('name', 'No name') }}</p>
+                            <form method="POST" action="{{ url_for('confirm_track') }}" class="d-inline">
+                                <input type="hidden" name="track_index" value="{{ track_index }}">
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    <i class="fas fa-check"></i> Add This Track
+                                </button>
+                            </form>
                         {% else %}
-                            <div class="alert alert-warning">
-                                <i class="fas fa-exclamation-triangle"></i> 
-                                No matching tracks found on Spotify for this song.
-                            </div>
+                            <p class="text-warning">No Spotify track found</p>
                         {% endif %}
                         
                         <div class="mt-3">

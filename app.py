@@ -2641,12 +2641,29 @@ def sync_playlist_songs():
 @login_required
 def confirm_fallback_tracks():
     """Show fallback tracks for user confirmation"""
-    pending_tracks = session.get('pending_tracks', [])
-    if not pending_tracks:
-        flash('No pending tracks to confirm.')
+    try:
+        pending_tracks = session.get('pending_tracks', [])
+        print(f"DEBUG: Pending tracks count: {len(pending_tracks)}")
+        print(f"DEBUG: Pending tracks data: {pending_tracks}")
+        
+        if not pending_tracks:
+            flash('No pending tracks to confirm.')
+            return redirect(url_for('dashboard'))
+        
+        # Validate data structure
+        for i, track_data in enumerate(pending_tracks):
+            print(f"DEBUG: Track {i}: {track_data}")
+            if 'song_info' not in track_data:
+                print(f"ERROR: Track {i} missing 'song_info' key")
+                flash('Error: Invalid track data structure.')
+                return redirect(url_for('dashboard'))
+        
+        return render_template('confirm_fallback_tracks.html', pending_tracks=pending_tracks)
+        
+    except Exception as e:
+        print(f"ERROR in confirm_fallback_tracks: {e}")
+        flash(f'Error loading fallback tracks: {str(e)}')
         return redirect(url_for('dashboard'))
-    
-    return render_template('confirm_fallback_tracks.html', pending_tracks=pending_tracks)
 
 @app.route('/confirm_track', methods=['POST'])
 @login_required

@@ -413,87 +413,51 @@ def parse_youtube_title_with_gemini(title, channel_title=None):
         # Create Gemini model
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # Create a web search-enabled prompt for Gemini
+        # Create a focused prompt for Gemini to extract song name only
         prompt = f"""
-You are a music industry expert. I need you to find the ACTUAL song name and artist for this YouTube video title by searching the web for accurate information.
+You are a music industry expert. I need you to extract ONLY the clean song name from this YouTube video title.
 
 YouTube Title: "{title}"
 Channel Name: "{channel_title or 'Unknown'}"
 
-TASK: Search the web to find the real song name and artist information for this video.
-
-SEARCH INSTRUCTIONS:
-1. Search for the song using the YouTube title to find official music information
-2. Look for the actual song name (clean, without video descriptors or movie names)
-3. For titles with ":" or "||", the part before is usually the song name
-4. Find the real artist/singer/music director (not actors or channel names)
-5. Verify the information from reliable music sources like Spotify, Apple Music, or official music websites
-6. For Indian movie songs, prioritize the music director/singer over actors
+TASK: Extract the clean song name from the YouTube title.
 
 IMPORTANT RULES:
-- PRESERVE the original song name if it's already clean (don't change "Telisiney Na Nuvvey" to "Telisene Nuvve")
-- Only extract song name from complex titles like "Song Name : Movie Name" or "Song Name || Movie Name"
+- Extract ONLY the song name (not album/movie names)
 - Remove "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", "Full Video Songs", etc.
-- For titles like "Song Name : Movie Name", extract ONLY the song name part
-- Find the ACTUAL SINGER/VOCALIST (not music directors, channel names, or actors)
-- For Spotify search, we need the SINGER'S NAME, not the music director
-- For Indian movies: Look for singers like "Arijit Singh", "Karthik", "Shreya Ghoshal", "Sid Sriram"
-- Music directors like "DSP", "Devi Sri Prasad", "A.R. Rahman" are NOT the singers
-- Actor names like "Prabhas", "Kajal Aggarwal" are usually not the singers
-- Use web search to find the actual vocalist who sang the song
-
-SEARCH QUERIES TO USE (in this order):
-1. Search: "[song name] [movie name] who sang singer"
-2. Search: "[song name] [movie name] vocalist"
-3. Search: "[song name] [movie name] singer name"
-4. Search: "[song name] official music video singer"
-5. Search: "[song name] spotify who sang"
-
-VERIFICATION STEPS:
-- Cross-check multiple sources
-- Look for official music videos or Spotify pages
-- Verify the singer's name from reliable music databases
-- If unsure, search for "[song name] [movie name] singer" to find the actual vocalist
-
-Respond in this EXACT JSON format:
-{{
-    "song_name": "Actual Clean Song Name",
-    "artist_name": "Real Artist/Singer Name"
-}}
+- For titles with ":" or "||", the part before is usually the song name
+- For titles with "by" or "from", extract the part before these words
+- PRESERVE the original song name if it's already clean
+- Don't change song names (e.g., "Telisiney Na Nuvvey" stays "Telisiney Na Nuvvey")
 
 EXAMPLES:
-- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → Search for "Badhulu Thochanai who sang singer" → {{"song_name": "Badhulu Thochanai", "artist_name": "Karthik"}}
-- "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → Search for "Kanulanu Thaake Manam who sang" → {{"song_name": "Kanulanu Thaake", "artist_name": "Arijit Singh"}}
-- "Yenno Yenno : Malli Malli Idi Rani Roju Full Video Songs" → Search for "Yenno Yenno who sang singer" → {{"song_name": "Yenno Yenno", "artist_name": "Mohit Chauhan"}}
-- "Telisiney Na Nuvvey" → PRESERVE original name → {{"song_name": "Telisiney Na Nuvvey", "artist_name": "Sid Sriram"}}
+- "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → "Jeena Jeena"
+- "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui & Sunanda Sharma" → "Baarish Ki Jaaye"
+- "Ae Dil Hai Mushkil Title Track Full Video" → "Ae Dil Hai Mushkil"
+- "Milne Hai Mujhse Aayi Aashiqui 2 Full Video Song" → "Milne Hai Mujhse Aayi"
+- "The PropheC - To The Stars | Official Video" → "To The Stars"
 
-Use web search to find the most accurate information possible.
+Respond with ONLY the clean song name, nothing else.
 """
 
         # Get response from Gemini
         response = model.generate_content(prompt)
         
-        # Parse the JSON response
+        # Parse the response (just song name)
         try:
             # Clean the response text - remove markdown code blocks if present
             response_text = response.text.strip()
-            if response_text.startswith('```json'):
-                response_text = response_text.replace('```json', '').replace('```', '').strip()
-            elif response_text.startswith('```'):
+            if response_text.startswith('```'):
                 response_text = response_text.replace('```', '').strip()
             
-            result = json.loads(response_text)
-            song_name = result.get('song_name', title).strip()
-            artist_name = result.get('artist_name', channel_title or 'Unknown Artist').strip()
+            song_name = response_text.strip()
             
-            # Validate the results
+            # Validate the result
             if not song_name or song_name == "Unknown Title":
                 song_name = title
-            if not artist_name or artist_name == "Unknown Artist":
-                artist_name = channel_title or "Unknown Artist"
             
-            print(f"Gemini parsing (selected): '{title}' -> Song: '{song_name}', Artist: '{artist_name}'")
-            return song_name, artist_name
+            print(f"Gemini parsing (selected): '{title}' -> Song: '{song_name}'")
+            return song_name, None  # Return None for artist since we'll search for it separately
             
         except json.JSONDecodeError as e:
             print(f"Gemini returned invalid JSON: {response.text}")
@@ -507,6 +471,70 @@ Use web search to find the most accurate information possible.
 def parse_youtube_title_for_sync(title, channel_title=None):
     """Parse YouTube video title using Gemini AI for selected songs during sync"""
     return parse_youtube_title_with_gemini(title, channel_title)
+
+def get_artist_and_album_info(song_name, original_title, channel_title=None):
+    """Get artist and album information using Gemini AI"""
+    if not GEMINI_API_KEY:
+        return None, None
+    
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""
+You are a music industry expert. I need you to find the artist and album information for this song.
+
+Song Name: "{song_name}"
+Original YouTube Title: "{original_title}"
+Channel Name: "{channel_title or 'Unknown'}"
+
+TASK: Find the actual artist/singer and album name for this song.
+
+SEARCH INSTRUCTIONS:
+1. Search for the song using the song name and original YouTube title
+2. Find the real artist/singer (not music directors, channel names, or actors)
+3. Find the album name or movie name
+4. For Indian movies: Look for singers like "Arijit Singh", "Karthik", "Shreya Ghoshal", "Sid Sriram"
+5. Music directors like "DSP", "Devi Sri Prasad", "A.R. Rahman" are NOT the singers
+6. Actor names like "Prabhas", "Kajal Aggarwal" are usually not the singers
+
+Respond in this EXACT JSON format:
+{{
+    "artist_name": "Real Artist/Singer Name",
+    "album_name": "Album or Movie Name"
+}}
+
+EXAMPLES:
+- Song: "Jeena Jeena", Title: "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → {{"artist_name": "Atif Aslam", "album_name": "Badlapur"}}
+- Song: "Ae Dil Hai Mushkil", Title: "Ae Dil Hai Mushkil Title Track Full Video" → {{"artist_name": "Arijit Singh", "album_name": "Ae Dil Hai Mushkil"}}
+- Song: "Baarish Ki Jaaye", Title: "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui" → {{"artist_name": "B Praak", "album_name": "Baarish Ki Jaaye"}}
+
+Use web search to find the most accurate information possible.
+"""
+        
+        response = model.generate_content(prompt)
+        
+        # Parse the JSON response
+        try:
+            response_text = response.text.strip()
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').replace('```', '').strip()
+            elif response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+            
+            result = json.loads(response_text)
+            artist_name = result.get('artist_name', '').strip()
+            album_name = result.get('album_name', '').strip()
+            
+            print(f"Gemini artist/album search: '{song_name}' -> Artist: '{artist_name}', Album: '{album_name}'")
+            return artist_name, album_name
+            
+        except json.JSONDecodeError as e:
+            print(f"Gemini returned invalid JSON for artist/album: {response.text}")
+            return None, None
+            
+    except Exception as e:
+        print(f"Gemini API error for artist/album: {e}")
+        return None, None
 
 def parse_youtube_title_fallback(title, channel_title=None):
     """Fallback regex-based parser when Gemini is not available"""
@@ -607,52 +635,98 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
             try:
                 print(f"Searching Spotify for: '{song_info['title']}' by '{song_info['artist']}'")
                 
-                # Search for the song on Spotify with multiple strategies
-                search_queries = [
-                    f'track:"{song_info["title"]}" artist:"{song_info["artist"]}"',  # Exact phrase match
-                    f'track:{song_info["title"]} artist:{song_info["artist"]}',      # Standard search
-                    f'"{song_info["title"]}" "{song_info["artist"]}"',              # Phrase search
-                    f'{song_info["title"]} {song_info["artist"]}'                   # Simple search
-                ]
+                # Systematic search approach: Try artist first, then album, then song name only
+                search_strategies = []
                 
+                # Strategy 1: Search with artist name
+                if song_info.get('artist'):
+                    search_strategies.append({
+                        'name': 'artist',
+                        'queries': [
+                            f'track:"{song_info["title"]}" artist:"{song_info["artist"]}"',
+                            f'track:{song_info["title"]} artist:{song_info["artist"]}',
+                            f'"{song_info["title"]}" "{song_info["artist"]}"',
+                            f'{song_info["title"]} {song_info["artist"]}'
+                        ]
+                    })
+                
+                # Strategy 2: Search with album name
+                if song_info.get('album'):
+                    search_strategies.append({
+                        'name': 'album',
+                        'queries': [
+                            f'track:"{song_info["title"]}" album:"{song_info["album"]}"',
+                            f'track:{song_info["title"]} album:{song_info["album"]}',
+                            f'"{song_info["title"]}" "{song_info["album"]}"',
+                            f'{song_info["title"]} {song_info["album"]}'
+                        ]
+                    })
+                
+                # Strategy 3: Search with song name only
+                search_strategies.append({
+                    'name': 'song_only',
+                    'queries': [
+                        f'track:"{song_info["title"]}"',
+                        f'track:{song_info["title"]}',
+                        f'"{song_info["title"]}"',
+                        f'{song_info["title"]} song',
+                        f'{song_info["title"]} music',
+                        f'{song_info["title"]} audio'
+                    ]
+                })
+                
+                # Try each strategy in order
                 results = None
+                used_strategy = None
                 used_query = None
                 
-                for query in search_queries:
-                    print(f"Trying search query: {query}")
-                    results = sp.search(q=query, type='track', limit=1)
-                    if results['tracks']['items']:
-                        used_query = query
+                for strategy in search_strategies:
+                    print(f"Trying {strategy['name']} strategy...")
+                    for query in strategy['queries']:
+                        print(f"  Query: {query}")
+                        results = sp.search(q=query, type='track', limit=1)
+                        if results['tracks']['items']:
+                            used_strategy = strategy['name']
+                            used_query = query
+                            break
+                    if results and results['tracks']['items']:
                         break
                 
-                print(f"Search results: {len(results['tracks']['items'])} tracks found using query: {used_query}")
+                print(f"Search results: {len(results['tracks']['items'])} tracks found using {used_strategy} strategy: {used_query}")
                 
                 if results['tracks']['items']:
                     track = results['tracks']['items'][0]
                     track_uri = track['uri']
                     print(f"Found track: {track['name']} by {track['artists'][0]['name']} - URI: {track_uri}")
                     
-                    # Validate that the found track is actually the song we're looking for
+                    # Validate based on search strategy used
                     track_name_lower = track['name'].lower()
                     song_title_lower = song_info['title'].lower()
                     
-                    # Much stricter validation - require actual word overlap
+                    # Calculate word overlap
                     song_words = set(song_title_lower.split())
                     track_words = set(track_name_lower.split())
-                    
-                    # Check for meaningful word overlap (at least 50% of song words must be in track)
                     common_words = song_words.intersection(track_words)
                     word_overlap_ratio = len(common_words) / len(song_words) if song_words else 0
                     
-                    # Also check if track name contains song title or vice versa
+                    # Check for contains match
                     contains_match = (
                         song_title_lower in track_name_lower or 
                         track_name_lower in song_title_lower
                     )
                     
-                    is_good_match = word_overlap_ratio >= 0.5 or contains_match
+                    # Different validation thresholds based on search strategy
+                    if used_strategy == 'artist':
+                        # Artist search should be very accurate
+                        is_good_match = word_overlap_ratio >= 0.7 or contains_match
+                    elif used_strategy == 'album':
+                        # Album search should be reasonably accurate
+                        is_good_match = word_overlap_ratio >= 0.5 or contains_match
+                    else:  # song_only
+                        # Song-only search can be more lenient
+                        is_good_match = word_overlap_ratio >= 0.3 or contains_match
                     
-                    print(f"Validation: '{song_title_lower}' vs '{track_name_lower}'")
+                    print(f"Validation ({used_strategy}): '{song_title_lower}' vs '{track_name_lower}'")
                     print(f"Song words: {song_words}, Track words: {track_words}")
                     print(f"Common words: {common_words}, Overlap ratio: {word_overlap_ratio:.2f}")
                     print(f"Contains match: {contains_match}, Good match: {is_good_match}")
@@ -1861,15 +1935,19 @@ def sync_playlist_songs():
                                 original_title = original_title.replace("YouTube_ORIGINAL:", "")
                                 print(f"Found original YouTube title: '{original_title}'")
                                 
-                                # Use Gemini to parse the original YouTube title for better results
-                                parsed_title, parsed_artist = parse_youtube_title_for_sync(original_title, song.artist)
+                                # Step 1: Extract clean song name using Gemini
+                                parsed_title, _ = parse_youtube_title_for_sync(original_title, song.artist)
                                 
-                                print(f"Gemini parsed result: '{parsed_title}' by '{parsed_artist}'")
+                                # Step 2: Get artist and album info using Gemini
+                                artist_name, album_name = get_artist_and_album_info(parsed_title, original_title, song.artist)
+                                
+                                print(f"Gemini parsed result: '{parsed_title}' by '{artist_name}' from '{album_name}'")
                                 
                                 songs_to_add_to_platform.append({
                                     'title': parsed_title,
-                                    'artist': parsed_artist,
-                                    'album': 'YouTube',
+                                    'artist': artist_name,
+                                    'album': album_name,
+                                    'original_title': original_title,
                                     'duration': song.duration
                                 })
                             else:

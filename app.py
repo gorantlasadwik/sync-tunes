@@ -1122,25 +1122,30 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     
                     print(f"Gemini re-analysis: '{original_title}' -> '{corrected_song_name}'")
                     
-                    # Now search Spotify with the corrected song name
+                    # Now search Spotify with the corrected song name using more targeted queries
                     fallback_queries = [
                         f'track:"{corrected_song_name}"',  # Exact phrase match
-                        f'track:{corrected_song_name}',    # Standard search
                         f'"{corrected_song_name}"',        # Phrase search
+                        f'track:{corrected_song_name}',    # Standard search
                         f'{corrected_song_name}',          # Simple search
-                        f'{corrected_song_name} song',     # Add "song" keyword
-                        f'{corrected_song_name} music',    # Add "music" keyword
-                        f'{corrected_song_name} audio',    # Add "audio" keyword
-                        # Add language-specific searches
-                        f'{corrected_song_name} bollywood',
-                        f'{corrected_song_name} hindi',
-                        f'{corrected_song_name} telugu',
-                        f'{corrected_song_name} tamil',
-                        f'{corrected_song_name} punjabi',
-                        # Try partial matches with corrected song name
-                        f'{corrected_song_name.split()[0]}' if corrected_song_name.split() else corrected_song_name,  # First word only
-                        f'{corrected_song_name.split()[-1]}' if corrected_song_name.split() else corrected_song_name  # Last word only
                     ]
+                    
+                    # Add artist-specific searches if we have artist info
+                    if song_info.get('artist') and song_info['artist'] != 'Unknown':
+                        artist_name = song_info['artist']
+                        fallback_queries.extend([
+                            f'track:"{corrected_song_name}" artist:"{artist_name}"',
+                            f'"{corrected_song_name}" "{artist_name}"',
+                            f'{corrected_song_name} {artist_name}',
+                        ])
+                    
+                    # Add album-specific searches if we have album info
+                    if song_info.get('album') and song_info['album'] != 'Unknown':
+                        album_name = song_info['album']
+                        fallback_queries.extend([
+                            f'track:"{corrected_song_name}" album:"{album_name}"',
+                            f'"{corrected_song_name}" "{album_name}"',
+                        ])
                     
                     fallback_results = None
                     used_fallback_query = None
@@ -1159,132 +1164,63 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     if fallback_results['tracks']['items']:
                         print(f"Fallback search found {len(fallback_results['tracks']['items'])} tracks")
                         
-                        # Find the best fallback match with strict validation
-                        best_track = None
-                        best_score = 0
-                        
-                        for track in fallback_results['tracks']['items']:
-                            track_name_lower = track['name'].lower()
-                            song_title_lower = corrected_song_name.lower()
-                            
-                            # Calculate word overlap score
-                            song_words = set(song_title_lower.split())
-                            track_words = set(track_name_lower.split())
-                            common_words = song_words.intersection(track_words)
-                            word_overlap_ratio = len(common_words) / len(song_words) if song_words else 0
-                            
-                            # Check for contains match
-                            contains_match = (
-                                song_title_lower in track_name_lower or 
-                                track_name_lower in song_title_lower
-                            )
-                            
-                            # Calculate overall score
-                            score = word_overlap_ratio + (1.0 if contains_match else 0.0)
-                            
-                            print(f"Fallback validation: '{song_title_lower}' vs '{track_name_lower}'")
-                            print(f"Common words: {common_words}, Overlap ratio: {word_overlap_ratio:.2f}, Score: {score:.2f}")
-                            
-                            if score > best_score:
-                                best_score = score
-                                best_track = track
-                        
-                        # Store only meaningful fallback results for user confirmation
+                        # Find the best fallback matches using advanced fuzzy matching
                         fallback_tracks = []
+                        
                         for track in fallback_results['tracks']['items']:
-                            track_name_lower = track['name'].lower()
-                            song_title_lower = corrected_song_name.lower()
+                            # Use the same advanced fuzzy matching as main search
+                            fuzzy_scores = advanced_fuzzy_match(corrected_song_name, song_info.get('artist', ''), track)
                             
-                            # Calculate word overlap score
-                            song_words = set(song_title_lower.split())
-                            track_words = set(track_name_lower.split())
-                            common_words = song_words.intersection(track_words)
-                            word_overlap_ratio = len(common_words) / len(song_words) if song_words else 0
-                            
-                            # Check for contains match
-                            contains_match = (
-                                song_title_lower in track_name_lower or 
-                                track_name_lower in song_title_lower
+                            # Calculate confidence using the same method as main search
+                            fallback_confidence = calculate_confidence_score(
+                                song_info.get('gemini_confidence', 0.5),
+                                fuzzy_scores,
+                                'song_only',  # Fallback is always song-only search
+                                song_info.get('channel_name')
                             )
                             
-                            # Calculate overall score
-                            score = word_overlap_ratio + (1.0 if contains_match else 0.0)
+                            print(f"Fallback validation: '{corrected_song_name}' vs '{track['name']}'")
+                            print(f"Fuzzy scores: {fuzzy_scores}")
+                            print(f"Fallback confidence: {fallback_confidence:.3f}")
                             
-                            # Better filtering for fallback results
-                            # Reject completely irrelevant matches
-                            is_relevant = (
-                                score >= 0.3 or  # Good similarity score
-                                contains_match or  # Contains the song name
-                                any(word in track['name'].lower() for word in song_title_lower.split() if len(word) > 3)  # Has meaningful word overlap
-                            )
-                            
-                            if is_relevant:
+                            # Only include tracks with reasonable similarity
+                            if fuzzy_scores.get('title_simple_ratio', 0) >= 20:  # At least 20% similarity
                                 fallback_tracks.append({
-                                    'name': track['name'],
-                                    'artist': track['artists'][0]['name'],
-                                    'uri': track['uri'],
-                                    'album': track['album']['name'],
-                                    'score': score,
-                                    'is_fallback': True
+                                    'track': track,
+                                    'confidence': fallback_confidence,
+                                    'fuzzy_scores': fuzzy_scores
                                 })
-                                print(f"Including fallback track: '{track['name']}' (score: {score:.2f})")
-                            else:
-                                print(f"Rejecting fallback track: '{track['name']}' (score: {score:.2f}) - not relevant")
                         
-                        # Sort by score (highest first)
-                        fallback_tracks.sort(key=lambda x: x['score'], reverse=True)
+                        # Sort by confidence and take top 3
+                        fallback_tracks.sort(key=lambda x: x['confidence'], reverse=True)
+                        fallback_tracks = fallback_tracks[:3]  # Top 3 most relevant
                         
-                        # Always store fallback results for user confirmation (even if low quality)
+                        # Store fallback results for user confirmation
                         if fallback_tracks:
-                            # Store in session for user confirmation
-                            if 'pending_tracks' not in session:
-                                session['pending_tracks'] = []
-                            
-                            session['pending_tracks'].append({
-                                'original_song': song_info,
-                                'fallback_tracks': fallback_tracks,
-                                'playlist_id': playlist.platform_playlist_id
-                            })
-                            session.modified = True
-                            
-                            print(f"Stored {len(fallback_tracks)} fallback tracks for user confirmation")
-                            print(f"Total pending tracks in session: {len(session['pending_tracks'])}")
-                            
-                            # Log fallback results to file
-                            with open('/tmp/sync_debug.log', 'a') as f:
-                                f.write(f"Fallback search found {len(fallback_tracks)} tracks for '{song_info['title']}'\n")
-                                for track in fallback_tracks:
-                                    f.write(f"  - {track['name']} by {track['artist']} (Score: {track['score']:.2f})\n")
+                            print(f"Found {len(fallback_tracks)} relevant fallback tracks")
+                            for i, fallback_data in enumerate(fallback_tracks):
+                                track = fallback_data['track']
+                                confidence = fallback_data['confidence']
+                                print(f"Fallback {i+1}: '{track['name']}' by {track['artists'][0]['name']} (confidence: {confidence:.3f})")
+                                
+                                # Add to pending tracks for user confirmation
+                                pending_tracks.append({
+                                    'song_info': song_info,
+                                    'spotify_track': track,
+                                    'confidence': confidence,
+                                    'search_strategy': 'fallback',
+                                    'fuzzy_scores': fallback_data['fuzzy_scores']
+                                })
                         else:
-                            # Even if no fallback results, store the original song for manual search
-                            if 'pending_tracks' not in session:
-                                session['pending_tracks'] = []
-                            
-                            session['pending_tracks'].append({
-                                'original_song': song_info,
-                                'fallback_tracks': [{
-                                    'name': 'No matches found - Manual search required',
-                                    'artist': 'Search manually on Spotify',
-                                    'uri': None,
-                                    'album': 'No automatic match found',
-                                    'score': 0.0,
-                                    'is_manual_search': True
-                                }],
-                                'playlist_id': playlist.platform_playlist_id
+                            print("No relevant fallback tracks found - will skip this song")
+                            # Add to pending tracks as "no match found"
+                            pending_tracks.append({
+                                'song_info': song_info,
+                                'spotify_track': None,
+                                'confidence': 0.0,
+                                'search_strategy': 'no_match',
+                                'fuzzy_scores': {}
                             })
-                            session.modified = True
-                            
-                            print(f"No fallback results found for '{song_info['title']}' - stored for manual search")
-                            
-                            # Log no meaningful results
-                            with open('/tmp/sync_debug.log', 'a') as f:
-                                f.write(f"No fallback results found for '{song_info['title']}' - manual search required\n")
-                    else:
-                        print(f"No tracks found even with fallback search for: {song_info['title']}")
-                        
-                        # Log no results to file
-                        with open('/tmp/sync_debug.log', 'a') as f:
-                            f.write(f"No Spotify track found for: {song_info['title']} by {song_info['artist']} (no fallback results)\n")
                     
             except Exception as song_error:
                 print(f"Error adding song '{song_info['title']}' to Spotify: {song_error}")

@@ -756,7 +756,7 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         ]
                     })
                 
-                # Strategy 3: Search with song name only
+                # Strategy 3: Search with song name only (improved queries)
                 search_strategies.append({
                     'name': 'song_only',
                     'queries': [
@@ -765,7 +765,13 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         f'"{song_info["title"]}"',
                         f'{song_info["title"]} song',
                         f'{song_info["title"]} music',
-                        f'{song_info["title"]} audio'
+                        f'{song_info["title"]} audio',
+                        # Add more specific queries for better results
+                        f'{song_info["title"]} bollywood',
+                        f'{song_info["title"]} hindi',
+                        f'{song_info["title"]} telugu',
+                        f'{song_info["title"]} tamil',
+                        f'{song_info["title"]} punjabi'
                     ]
                 })
                 
@@ -893,7 +899,16 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         f'{song_info["title"]}',          # Simple search
                         f'{song_info["title"]} song',     # Add "song" keyword
                         f'{song_info["title"]} music',    # Add "music" keyword
-                        f'{song_info["title"]} audio'     # Add "audio" keyword
+                        f'{song_info["title"]} audio',    # Add "audio" keyword
+                        # Add language-specific searches
+                        f'{song_info["title"]} bollywood',
+                        f'{song_info["title"]} hindi',
+                        f'{song_info["title"]} telugu',
+                        f'{song_info["title"]} tamil',
+                        f'{song_info["title"]} punjabi',
+                        # Try partial matches
+                        f'{song_info["title"].split()[0]}',  # First word only
+                        f'{song_info["title"].split()[-1]}'  # Last word only
                     ]
                     
                     fallback_results = None
@@ -901,10 +916,12 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     
                     for query in fallback_queries:
                         print(f"Trying fallback query: {query}")
-                        fallback_results = sp.search(q=query, type='track', limit=5)
+                        fallback_results = sp.search(q=query, type='track', limit=10)  # Get more results
                         if fallback_results['tracks']['items']:
                             used_fallback_query = query
-                            break
+                            # Don't break immediately - try to get more diverse results
+                            if len(fallback_results['tracks']['items']) >= 5:
+                                break
                     
                     print(f"Fallback search results: {len(fallback_results['tracks']['items'])} tracks found using query: {used_fallback_query}")
                     
@@ -962,8 +979,15 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                             # Calculate overall score
                             score = word_overlap_ratio + (1.0 if contains_match else 0.0)
                             
-                            # Include more tracks for user confirmation (lower threshold)
-                            if score >= 0.1 or contains_match:
+                            # Better filtering for fallback results
+                            # Reject completely irrelevant matches
+                            is_relevant = (
+                                score >= 0.3 or  # Good similarity score
+                                contains_match or  # Contains the song name
+                                any(word in track['name'].lower() for word in song_title_lower.split() if len(word) > 3)  # Has meaningful word overlap
+                            )
+                            
+                            if is_relevant:
                                 fallback_tracks.append({
                                     'name': track['name'],
                                     'artist': track['artists'][0]['name'],
@@ -974,7 +998,7 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                                 })
                                 print(f"Including fallback track: '{track['name']}' (score: {score:.2f})")
                             else:
-                                print(f"Rejecting fallback track: '{track['name']}' (score: {score:.2f}) - too low")
+                                print(f"Rejecting fallback track: '{track['name']}' (score: {score:.2f}) - not relevant")
                         
                         # Sort by score (highest first)
                         fallback_tracks.sort(key=lambda x: x['score'], reverse=True)

@@ -10,7 +10,8 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import google.generativeai as genai
-from thefuzz import fuzz, process
+from thefuzz import fuzz
+from groq import Groq
 import re
 
 # Load environment variables
@@ -22,6 +23,13 @@ GEMINI_QUOTA_EXCEEDED = False  # Global flag to track quota status
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     print(f"✅ Gemini API configured with key: {GEMINI_API_KEY[:10]}...")
+
+# Configure Groq API
+GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+if GROQ_API_KEY:
+    print(f"✅ Groq API configured with key: {GROQ_API_KEY[:10]}...")
+else:
+    print("⚠️ Groq API key not found - will use fallback parsing only")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
@@ -411,12 +419,319 @@ def reset_gemini_quota():
     GEMINI_QUOTA_EXCEEDED = False
     print("🔄 Gemini quota flag reset - ready to use new API key")
 
+def parse_youtube_title_with_groq(title, channel_title=None):
+    """Parse YouTube video title using Groq AI for intelligent extraction"""
+    if not title:
+        return "Unknown Title", "Unknown Artist"
+    
+    if not GROQ_API_KEY:
+        print("Groq API key not available, using fallback parsing")
+        return parse_youtube_title_fallback(title, channel_title)
+    
+    try:
+        # Initialize Groq client
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        # Enhanced prompt for Groq
+        prompt = f"""
+You are a music industry expert. I need you to extract the clean song name and artist from this YouTube video title.
+
+YOUTUBE TITLE: "{title}"
+CHANNEL: "{channel_title or 'Unknown'}"
+
+TASK: Extract the clean song name and artist name.
+
+IMPORTANT RULES:
+- Extract ONLY the song name (not album/movie names)
+- Remove "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", "Full Video Songs", etc.
+- For titles with ":" or "||", the part before is usually the song name
+- For titles with "by" or "from", extract the part before these words
+- For titles with " - ", the part AFTER the dash is often the song name
+- Look for patterns like "Movie Name - Song Name" and extract the song name
+- PRESERVE the original song name if it's already clean
+- Don't change song names (e.g., "Telisiney Na Nuvvey" stays "Telisiney Na Nuvvey")
+
+EXAMPLES:
+- "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → Song: "Jeena Jeena", Artist: "Sachin - Jigar"
+- "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui & Sunanda Sharma" → Song: "Baarish Ki Jaaye", Artist: "B Praak"
+- "Ae Dil Hai Mushkil Title Track Full Video" → Song: "Ae Dil Hai Mushkil", Artist: "Unknown Artist"
+- "Saripodhaa Sanivaaram - Bhaga Bhaga Lyrical | Nani | Priyanka Mohan" → Song: "Bhaga Bhaga", Artist: "Unknown Artist"
+- "Kaifi Khalil - Kahani Suno 2.0 [Official Music Video]" → Song: "Kahani Suno 2.0", Artist: "Kaifi Khalil"
+- "Darshana Full Video Song | Vinaro Bhagyamu Vishnu Katha | Kiran Abbavaram | Chaitan Bharadwaj" → Song: "Darshana", Artist: "Kiran Abbavaram"
+
+Respond in this EXACT JSON format:
+{{
+    "song_name": "Clean Song Name",
+    "artist_name": "Artist Name or Unknown Artist"
+}}
+"""
+
+        # Get response from Groq
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model="llama-3.1-70b-versatile",  # Using Llama 3.1 70B for best results
+            temperature=0.1,  # Low temperature for consistent parsing
+            max_tokens=200
+        )
+        
+        # Parse the response
+        try:
+            response_text = response.choices[0].message.content.strip()
+            
+            # Clean the response text - remove markdown code blocks if present
+            if response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').strip()
+            
+            # Parse JSON response
+            result = json.loads(response_text)
+            song_name = result.get('song_name', title).strip()
+            artist_name = result.get('artist_name', 'Unknown Artist').strip()
+            
+            # Validate the result
+            if not song_name or song_name == "Unknown Title":
+                song_name = title
+            
+            print(f"Groq parsing: '{title}' -> Song: '{song_name}', Artist: '{artist_name}'")
+            return song_name, artist_name
+            
+        except json.JSONDecodeError as e:
+            print(f"Groq returned invalid JSON: {response_text}")
+            print(f"JSON parsing error: {e}")
+            return parse_youtube_title_fallback(title, channel_title)
+            
+    except Exception as e:
+        print(f"Groq API error: {e}")
+        return parse_youtube_title_fallback(title, channel_title)
+
+def get_spotify_song_name_from_youtube_url_groq(video_id, original_title, channel_title=None):
+    """Use Groq with YouTube video URL to get the exact Spotify song name"""
+    if not GROQ_API_KEY:
+        return None, None, None, 0.0
+    
+    try:
+        # Initialize Groq client
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        # Create YouTube video URL
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        # Enhanced Groq prompt with YouTube URL
+        prompt = f"""
+You are a music industry expert. I need you to find the EXACT song name that exists on Spotify for this YouTube video.
+
+YOUTUBE VIDEO INFORMATION:
+- Video URL: {youtube_url}
+- Original Title: "{original_title}"
+- Channel: "{channel_title or 'Unknown'}"
+
+TASK:
+1. Analyze the YouTube video URL and title
+2. Extract the EXACT song name that would be found on Spotify
+3. Provide the correct artist name
+4. Provide the correct album/movie name
+5. Give a confidence score (0.0 to 1.0)
+
+IMPORTANT RULES:
+- The song name must be EXACTLY as it appears on Spotify
+- For Bollywood/Tollywood songs, use the official song name
+- For international songs, use the standard English title
+- Remove any "Full Video", "Lyrical", "Official", "HD" etc. from the title
+- For songs like "Movie Name - Song Name", extract ONLY the song name
+- Be very precise - this will be used to search Spotify directly
+
+EXAMPLES:
+- "Gilehriyaan - Lyrical Video | Dangal | Aamir Khan" → Song: "Gilehriyaan", Artist: "Shreya Ghoshal", Album: "Dangal"
+- "Aagi Aagi Full Video Song | Ee Nagaraniki Emaindi" → Song: "Aagi Aagi", Artist: "Sid Sriram", Album: "Ee Nagaraniki Emaindi"
+- "Samjhawan Unplugged Full Video" → Song: "Samjhawan", Artist: "Arijit Singh", Album: "Humpty Sharma Ki Dulhania"
+
+Respond in this EXACT JSON format:
+{{
+    "song_name": "Exact Song Name for Spotify",
+    "artist_name": "Correct Artist Name",
+    "album_name": "Album or Movie Name",
+    "confidence": 0.95
+}}
+"""
+
+        # Get response from Groq
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model="llama-3.1-70b-versatile",
+            temperature=0.1,
+            max_tokens=300
+        )
+        
+        # Parse the response
+        try:
+            response_text = response.choices[0].message.content.strip()
+            
+            # Clean the response text
+            if response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').strip()
+            
+            # Parse JSON response
+            result = json.loads(response_text)
+            song_name = result.get('song_name', '').strip()
+            artist_name = result.get('artist_name', '').strip()
+            album_name = result.get('album_name', '').strip()
+            confidence = float(result.get('confidence', 0.0))
+            
+            # Validate the result
+            if not song_name:
+                return None, None, None, 0.0
+            
+            print(f"Groq URL analysis: '{original_title}' -> Song: '{song_name}', Artist: '{artist_name}', Album: '{album_name}', Confidence: {confidence:.2f}")
+            return song_name, artist_name, album_name, confidence
+            
+        except json.JSONDecodeError as e:
+            print(f"Groq returned invalid JSON: {response_text}")
+            print(f"JSON parsing error: {e}")
+            return None, None, None, 0.0
+            
+    except Exception as e:
+        print(f"Groq API error for URL analysis: {e}")
+        return None, None, None, 0.0
+
+def analyze_youtube_description_groq(video_id, original_title, channel_title=None):
+    """Analyze YouTube video description using Groq to extract correct song information"""
+    if not GROQ_API_KEY:
+        return None, None, None, 0.0
+    
+    try:
+        # Initialize Groq client
+        client = Groq(api_key=GROQ_API_KEY)
+        
+        # Fetch video description using YouTube API
+        if not YOUTUBE_API_KEY:
+            return None, None, None, 0.0
+        
+        import requests
+        url = "https://www.googleapis.com/youtube/v3/videos"
+        params = {
+            'part': 'snippet',
+            'id': video_id,
+            'key': YOUTUBE_API_KEY
+        }
+        
+        response = requests.get(url, params=params)
+        if response.status_code != 200:
+            return None, None, None, 0.0
+        
+        data = response.json()
+        if not data.get('items'):
+            return None, None, None, 0.0
+        
+        description = data['items'][0]['snippet'].get('description', '')
+        
+        if not description:
+            return None, None, None, 0.0
+        
+        # Enhanced Groq prompt for description analysis
+        prompt = f"""
+You are a music industry expert. I need you to extract the correct song information from this YouTube video description.
+
+YOUTUBE VIDEO INFORMATION:
+- Original Title: "{original_title}"
+- Channel: "{channel_title or 'Unknown'}"
+- Description: "{description[:1000]}..."  # Truncated for context
+
+TASK:
+1. Analyze the YouTube video description
+2. Extract the EXACT song name that would be found on Spotify
+3. Provide the correct artist name
+4. Provide the correct album/movie name
+5. Give a confidence score (0.0 to 1.0)
+
+IMPORTANT RULES:
+- The song name must be EXACTLY as it appears on Spotify
+- Look for official song names in the description
+- Extract artist names from credits or performer information
+- Extract album/movie names from production credits
+- Be very precise - this will be used to search Spotify directly
+
+Respond in this EXACT JSON format:
+{{
+    "song_name": "Exact Song Name for Spotify",
+    "artist_name": "Correct Artist Name",
+    "album_name": "Album or Movie Name",
+    "confidence": 0.95
+}}
+"""
+
+        # Get response from Groq
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            model="llama-3.1-70b-versatile",
+            temperature=0.1,
+            max_tokens=300
+        )
+        
+        # Parse the response
+        try:
+            response_text = response.choices[0].message.content.strip()
+            
+            # Clean the response text
+            if response_text.startswith('```'):
+                response_text = response_text.replace('```', '').strip()
+            if response_text.startswith('```json'):
+                response_text = response_text.replace('```json', '').strip()
+            
+            # Parse JSON response
+            result = json.loads(response_text)
+            song_name = result.get('song_name', '').strip()
+            artist_name = result.get('artist_name', '').strip()
+            album_name = result.get('album_name', '').strip()
+            confidence = float(result.get('confidence', 0.0))
+            
+            # Validate the result
+            if not song_name:
+                return None, None, None, 0.0
+            
+            print(f"Groq description analysis: '{original_title}' -> Song: '{song_name}', Artist: '{artist_name}', Album: '{album_name}', Confidence: {confidence:.2f}")
+            return song_name, artist_name, album_name, confidence
+            
+        except json.JSONDecodeError as e:
+            print(f"Groq returned invalid JSON: {response_text}")
+            print(f"JSON parsing error: {e}")
+            return None, None, None, 0.0
+            
+    except Exception as e:
+        print(f"Groq API error for description analysis: {e}")
+        return None, None, None, 0.0
+
 @app.route('/reset_gemini_quota', methods=['POST'])
 @login_required
 def reset_gemini_quota_route():
     """Reset the Gemini quota flag"""
     reset_gemini_quota()
     flash('Gemini quota has been reset. You can now use advanced parsing features.')
+    return redirect(url_for('dashboard'))
+
+@app.route('/reset_ai_quota', methods=['POST'])
+@login_required
+def reset_ai_quota_route():
+    """Reset both Gemini and Groq quota flags"""
+    reset_gemini_quota()
+    flash('AI quota has been reset. Both Gemini and Groq are now available for advanced parsing.')
     return redirect(url_for('dashboard'))
 
 def parse_youtube_title_with_gemini(title, channel_title=None):
@@ -502,10 +817,42 @@ Respond with ONLY the clean song name, nothing else.
         return parse_youtube_title_fallback(title, channel_title)
 
 def parse_youtube_title_for_sync(title, channel_title=None):
-    """Parse YouTube video title using Gemini AI for selected songs during sync"""
-    return parse_youtube_title_with_gemini(title, channel_title)
+    """Parse YouTube video title using Gemini AI for selected songs during sync, with Groq fallback"""
+    # Try Gemini first
+    if GEMINI_API_KEY and not GEMINI_QUOTA_EXCEEDED:
+        try:
+            return parse_youtube_title_with_gemini(title, channel_title)
+        except Exception as e:
+            print(f"Gemini parsing failed: {e}")
+    
+    # Fallback to Groq if Gemini fails or quota exceeded
+    if GROQ_API_KEY:
+        print("Using Groq as fallback for title parsing...")
+        return parse_youtube_title_with_groq(title, channel_title)
+    
+    # Final fallback to regex parsing
+    print("Using regex fallback for title parsing...")
+    return parse_youtube_title_fallback(title, channel_title)
 
 def get_spotify_song_name_from_youtube_url(video_id, original_title, channel_title=None):
+    """Use Gemini with YouTube video URL to get the exact Spotify song name, with Groq fallback"""
+    global GEMINI_QUOTA_EXCEEDED
+    
+    # Try Gemini first
+    if GEMINI_API_KEY and not GEMINI_QUOTA_EXCEEDED:
+        try:
+            return get_spotify_song_name_from_youtube_url_gemini(video_id, original_title, channel_title)
+        except Exception as e:
+            print(f"Gemini URL analysis failed: {e}")
+    
+    # Fallback to Groq if Gemini fails or quota exceeded
+    if GROQ_API_KEY:
+        print("Using Groq as fallback for URL analysis...")
+        return get_spotify_song_name_from_youtube_url_groq(video_id, original_title, channel_title)
+    
+    return None, None, None, 0.0
+
+def get_spotify_song_name_from_youtube_url_gemini(video_id, original_title, channel_title=None):
     """Use Gemini with YouTube video URL to get the exact Spotify song name"""
     global GEMINI_QUOTA_EXCEEDED
     
@@ -674,7 +1021,23 @@ def search_youtube_music_for_metadata(original_title, channel_title=None):
         return None, None, None, 0.0
 
 def analyze_youtube_description(video_id, original_title, channel_title=None):
-    """Analyze YouTube video description to extract correct song information"""
+    """Analyze YouTube video description to extract correct song information, with Groq fallback"""
+    # Try Gemini first
+    if GEMINI_API_KEY and not GEMINI_QUOTA_EXCEEDED:
+        try:
+            return analyze_youtube_description_gemini(video_id, original_title, channel_title)
+        except Exception as e:
+            print(f"Gemini description analysis failed: {e}")
+    
+    # Fallback to Groq if Gemini fails or quota exceeded
+    if GROQ_API_KEY:
+        print("Using Groq as fallback for description analysis...")
+        return analyze_youtube_description_groq(video_id, original_title, channel_title)
+    
+    return None, None, None, 0.0
+
+def analyze_youtube_description_gemini(video_id, original_title, channel_title=None):
+    """Analyze YouTube video description using Gemini to extract correct song information"""
     if not GEMINI_API_KEY or GEMINI_QUOTA_EXCEEDED:
         return None, None, None, 0.0
     

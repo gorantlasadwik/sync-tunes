@@ -31,20 +31,25 @@
     </div>
 </div>
 
-<!-- Gemini Quota Reset Section -->
+<!-- AI Parsing Status Section -->
 <div class="card" style="background: linear-gradient(135deg, #ff6b6b, #ff8e8e); border: none; margin-bottom: 1rem;">
     <div class="card-header" style="background: transparent; border: none;">
         <h3 class="card-title" style="color: white; margin: 0;">AI Parsing Status</h3>
     </div>
     <div style="padding: 1rem; text-align: center;">
         <p style="color: white; margin: 0 0 1rem 0; font-size: 0.9rem;">
-            If songs are being parsed incorrectly, the AI quota might be exceeded. Reset it to enable advanced parsing.
+            Advanced AI parsing with Gemini + Groq fallback. If songs are parsed incorrectly, reset the AI quota.
         </p>
-        <form method="POST" action="{{ url_for('reset_gemini_quota_route') }}" style="display: inline;">
-            <button type="submit" class="btn" style="background: white; color: #ff6b6b; border: 2px solid white; padding: 0.5rem 1rem; border-radius: 5px; transition: all 0.3s ease;">
-                <i class="fas fa-sync-alt"></i> Reset AI Quota
-            </button>
-        </form>
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+            <form method="POST" action="{{ url_for('reset_ai_quota_route') }}" style="display: inline;">
+                <button type="submit" class="btn" style="background: white; color: #ff6b6b; border: 2px solid white; padding: 0.5rem 1rem; border-radius: 5px; transition: all 0.3s ease;">
+                    <i class="fas fa-sync-alt"></i> Reset AI Quota
+                </button>
+            </form>
+            <div style="background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 5px; font-size: 0.8rem;">
+                <i class="fas fa-robot"></i> Gemini + Groq Fallback
+            </div>
+        </div>
     </div>
 </div>
 

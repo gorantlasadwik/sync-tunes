@@ -502,8 +502,16 @@ def search_youtube_music_for_metadata(original_title, channel_title=None):
     try:
         from ytmusicapi import YTMusic
         
-        # Initialize YouTube Music API
-        ytmusic = YTMusic()
+        # Initialize YouTube Music API with authentication
+        # Try to use existing auth file, or create a new one
+        try:
+            ytmusic = YTMusic('oauth.json')  # Try existing auth file
+        except:
+            try:
+                ytmusic = YTMusic()  # Try without auth (may have limited access)
+            except Exception as e:
+                print(f"YouTube Music API initialization failed: {e}")
+                return None, None, None, 0.0
         
         # Try multiple search strategies
         search_queries = [
@@ -775,18 +783,20 @@ def advanced_fuzzy_match(song_title, artist_name, spotify_track):
     # 5. Channel-based confidence boost
     channel_boost = 0.1 if spotify_track.get('album', {}).get('name', '').lower() in ['t-series', 'sony music', 'zee music'] else 0
     
-    # Calculate composite score with stricter matching
-    # Use simple ratio as primary, with token ratio as secondary
-    title_score = (title_simple_ratio * 0.7 + title_token_ratio * 0.3) / 100
-    artist_score = (artist_simple_ratio * 0.7 + artist_token_ratio * 0.3) / 100 if artist_name else 0.5
+    # CRITICAL FIX: Use simple ratio as PRIMARY metric
+    # Simple ratio is most accurate for exact matches
+    title_score = title_simple_ratio / 100  # Use simple ratio directly
+    artist_score = artist_simple_ratio / 100 if artist_name else 0.5
     
-    # Penalize partial matches that are too different
-    if title_partial_ratio > 0 and title_simple_ratio < 50:
-        title_score *= 0.5  # Reduce score for partial matches that are very different
+    # HEAVY PENALTY for different titles
+    if title_simple_ratio < 60:  # Less than 60% similarity
+        title_score *= 0.5  # Heavy penalty
     
-    # Additional check: if titles are completely different, heavily penalize
-    if title_simple_ratio < 30 and title_token_ratio < 30:
-        title_score *= 0.2  # Heavily penalize completely different titles
+    if title_simple_ratio < 40:  # Less than 40% similarity  
+        title_score *= 0.2  # Very heavy penalty
+        
+    if title_simple_ratio < 20:  # Less than 20% similarity
+        title_score *= 0.05  # Extreme penalty
     
     # Weighted composite score
     composite_score = (
@@ -1024,14 +1034,14 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         song_info.get('channel_name')
                     )
                     
-                    # Confidence-based triage
-                    if overall_confidence >= 0.85:
+                    # Confidence-based triage (STRICTER THRESHOLDS)
+                    if overall_confidence >= 0.90:  # Increased from 0.85
                         match_quality = "HIGH"
                         is_good_match = True
-                    elif overall_confidence >= 0.7:
+                    elif overall_confidence >= 0.80:  # Increased from 0.7
                         match_quality = "MEDIUM"
                         is_good_match = True
-                    elif overall_confidence >= 0.4:
+                    elif overall_confidence >= 0.5:  # Increased from 0.4
                         match_quality = "LOW"
                         is_good_match = False  # Needs user confirmation
                     else:

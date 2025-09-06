@@ -415,18 +415,26 @@ def parse_youtube_title_with_gemini(title, channel_title=None):
         
         # Create a detailed prompt for Gemini
         prompt = f"""
-You are a music expert. Parse this YouTube video title and extract the most appropriate song name and artist name for music streaming platforms like Spotify.
+You are a music industry expert with deep knowledge of artists, songs, and music labels. Parse this YouTube video title and extract the most appropriate song name and artist name for music streaming platforms like Spotify.
 
 YouTube Title: "{title}"
 Channel Name: "{channel_title or 'Unknown'}"
 
-Rules:
-1. Extract the CLEAN song name (remove video descriptors like "Official Video", "Lyrics", "4K", "HD", "Full Song", etc.)
-2. Extract the MAIN artist name (not movie names, not multiple artists, just the primary artist)
-3. If the title contains movie/album names, ignore them
-4. If there are multiple artists, pick the most prominent one
-5. Keep song names concise and clean
-6. Use the channel name as artist if the title doesn't clearly indicate an artist
+IMPORTANT RULES:
+1. Extract the CLEAN song name (remove video descriptors like "Official Video", "Lyrics", "4K", "HD", "Full Song", "Video Songs", etc.)
+2. Extract the MAIN ARTIST NAME (the actual singer/performer, not channel names, movie names, or music labels)
+3. Channel names like "Mr. Perfect Songs", "Aditya Music", "T-Series" are usually MUSIC LABELS, not artists
+4. Look for the actual singer/performer name in the title
+5. If the title contains movie names, ignore them for the artist field
+6. If multiple artists are mentioned, pick the PRIMARY singer/performer
+7. If no clear artist is found, use the channel name as fallback
+8. Keep song names concise and clean
+
+MUSIC INDUSTRY CONTEXT:
+- "Mr. Perfect Songs" = Music label/channel, not artist
+- "Aditya Music" = Music label, not artist  
+- "T-Series" = Music label, not artist
+- Look for actual singer names like "Prabhas", "Kajal Aggarwal", "DSP", etc.
 
 Respond in this EXACT JSON format:
 {{
@@ -435,8 +443,9 @@ Respond in this EXACT JSON format:
 }}
 
 Examples:
-- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → {{"song_name": "Badhulu Thochanai", "artist_name": "Mr. Perfect Songs"}}
-- "Tribute to Kalki 2898 Ad - Full Song | Prabhas | Amitabh Bachchan" → {{"song_name": "Tribute to Kalki 2898 Ad", "artist_name": "Prabhas"}}
+- "Badhulu Thochanai Song With Lyrics - Mr. Perfect Songs - Prabhas, Kajal Aggarwal, DSP" → {{"song_name": "Badhulu Thochanai", "artist_name": "Prabhas"}}
+- "Kanulanu Thaake Full Video Song || Manam Video Songs || Naga Chaitanya,Samantha" → {{"song_name": "Kanulanu Thaake", "artist_name": "Naga Chaitanya"}}
+- "Yenno Yenno : Malli Malli Idi Rani Roju Full Video Songs" → {{"song_name": "Yenno Yenno", "artist_name": "Malli Malli Idi Rani Roju"}}
 - "Song Name (Official Video) - Artist Name" → {{"song_name": "Song Name", "artist_name": "Artist Name"}}
 """
 

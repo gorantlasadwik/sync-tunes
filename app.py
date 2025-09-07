@@ -804,11 +804,20 @@ IMPORTANT RULES:
 - PRESERVE the original song name if it's already clean
 - Don't change song names (e.g., "Telisiney Na Nuvvey" stays "Telisiney Na Nuvvey")
 
+SPECIAL PATTERNS FOR COMPLEX TITLES:
+- "Movie Name | Song Name | Artist" → Extract "Song Name" (second part)
+- "Movie Name - Song Name | Artist" → Extract "Song Name" (after dash)
+- "Artist - Song Name [Official Video]" → Extract "Song Name" (after dash)
+- "Song Name by Artist" → Extract "Song Name" (before "by")
+
 EXAMPLES:
 - "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → Song: "Jeena Jeena", Artist: "Sachin - Jigar"
 - "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui & Sunanda Sharma" → Song: "Baarish Ki Jaaye", Artist: "B Praak"
 - "Ae Dil Hai Mushkil Title Track Full Video" → Song: "Ae Dil Hai Mushkil", Artist: "Unknown Artist"
 - "Saripodhaa Sanivaaram - Bhaga Bhaga Lyrical | Nani | Priyanka Mohan" → Song: "Bhaga Bhaga", Artist: "Unknown Artist"
+- "Gabbar Singh Songs | Dil Se Dil Se Full Video Song | Latest Telugu Superhits" → Song: "Dil Se Dil Se Full Video Song", Artist: "Unknown Artist"
+- "Revenge Of Shadow - Telugu Movie Songs 2013 - Ft. Venkatesh Daggubati" → Song: "Telugu Movie Songs 2013", Artist: "Unknown Artist"
+- "Deva Shree Ganesha - Full Video | Agneepath | Hrithik Roshan" → Song: "Deva Shree Ganesha", Artist: "Unknown Artist"
 - "Kaifi Khalil - Kahani Suno 2.0 [Official Music Video]" → Song: "Kahani Suno 2.0", Artist: "Kaifi Khalil"
 - "Darshana Full Video Song | Vinaro Bhagyamu Vishnu Katha | Kiran Abbavaram | Chaitan Bharadwaj" → Song: "Darshana", Artist: "Kiran Abbavaram"
 
@@ -1123,11 +1132,20 @@ IMPORTANT RULES:
 - PRESERVE the original song name if it's already clean
 - Don't change song names (e.g., "Telisiney Na Nuvvey" stays "Telisiney Na Nuvvey")
 
+SPECIAL PATTERNS FOR COMPLEX TITLES:
+- "Movie Name | Song Name | Artist" → Extract "Song Name" (second part)
+- "Movie Name - Song Name | Artist" → Extract "Song Name" (after dash)
+- "Artist - Song Name [Official Video]" → Extract "Song Name" (after dash)
+- "Song Name by Artist" → Extract "Song Name" (before "by")
+
 EXAMPLES:
 - "UNPLUGGED Full Audio Song – Jeena Jeena by Sachin - Jigar" → "Jeena Jeena"
 - "Baarish Ki Jaaye | B Praak Ft Nawazuddin Siddiqui & Sunanda Sharma" → "Baarish Ki Jaaye"
 - "Ae Dil Hai Mushkil Title Track Full Video" → "Ae Dil Hai Mushkil"
 - "Saripodhaa Sanivaaram - Bhaga Bhaga Lyrical | Nani | Priyanka Mohan" → "Bhaga Bhaga"
+- "Gabbar Singh Songs | Dil Se Dil Se Full Video Song | Latest Telugu Superhits" → "Dil Se Dil Se Full Video Song"
+- "Revenge Of Shadow - Telugu Movie Songs 2013 - Ft. Venkatesh Daggubati" → "Telugu Movie Songs 2013"
+- "Deva Shree Ganesha - Full Video | Agneepath | Hrithik Roshan" → "Deva Shree Ganesha"
 - "Movie Name - Song Name | Artist" → "Song Name"
 - "Milne Hai Mujhse Aayi Aashiqui 2 Full Video Song" → "Milne Hai Mujhse Aayi"
 - "The PropheC - To The Stars | Official Video" → "To The Stars"

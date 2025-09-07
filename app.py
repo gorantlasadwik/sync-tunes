@@ -1428,22 +1428,75 @@ def sync_playlist_cross_platform(source_playlist, target_playlist, source_platfo
             song = db.session.get(Song, ps.song_id)
             if song and song.user_id == current_user.user_id:  # ✅ USER ISOLATION CHECK
                 source_songs.append({
+                    'song_id': song.song_id,  # Add song_id for tracking
                     'title': song.title,
                     'artist': song.artist,
                     'album': song.album,
                     'duration': song.duration
                 })
         
+        print(f"🔄 Starting sync: {len(source_songs)} songs from {source_platform} to {target_platform}")
+        
+        # Create sync log entry BEFORE starting sync
+        sync_log = SyncLog(
+            user_id=current_user.user_id,
+            source_account_id=source_account.account_id,
+            destination_account_id=target_account.account_id,
+            playlist_id=source_playlist.playlist_id,
+            total_songs_synced=len(source_songs),
+            songs_added=0,  # Will be updated after sync
+            songs_removed=0,
+            timestamp=datetime.now().date()
+        )
+        db.session.add(sync_log)
+        db.session.flush()  # Get the sync_id
+        
         # Add songs to target platform
         songs_added = 0
+        songs_failed = 0
+        
         if target_platform == 'Spotify':
             songs_added = update_spotify_playlist(target_account.auth_token, target_playlist, source_songs)
         elif target_platform == 'YouTube':
             songs_added = update_youtube_playlist(target_account.auth_token, target_playlist, source_songs)
         
-        return True, f"Successfully synced {songs_added} songs from {source_platform} to {target_platform}"
+        # Calculate failed songs
+        songs_failed = len(source_songs) - songs_added
+        
+        # Update sync log with actual results
+        sync_log.songs_added = songs_added
+        sync_log.songs_removed = 0  # Cross-platform sync doesn't remove songs
+        
+        # Create individual song tracking entries
+        for i, song_data in enumerate(source_songs):
+            if i < songs_added:
+                # Song was successfully added
+                sync_song = SyncSong(
+                    sync_id=sync_log.sync_id,
+                    song_id=song_data['song_id'],
+                    action='added',
+                    timestamp=datetime.now()
+                )
+                db.session.add(sync_song)
+            else:
+                # Song failed to be added
+                sync_song = SyncSong(
+                    sync_id=sync_log.sync_id,
+                    song_id=song_data['song_id'],
+                    action='failed',
+                    timestamp=datetime.now()
+                )
+                db.session.add(sync_song)
+        
+        db.session.commit()
+        
+        print(f"✅ Sync completed: {songs_added} added, {songs_failed} failed")
+        
+        return True, f"Successfully synced {songs_added} songs from {source_platform} to {target_platform} (Failed: {songs_failed})"
         
     except Exception as e:
+        db.session.rollback()
+        print(f"❌ Sync failed: {str(e)}")
         return False, f"Error syncing playlist: {str(e)}"
 
 # Database Models
@@ -1530,7 +1583,7 @@ class SyncSong(db.Model):
     __tablename__ = 'sync_song'
     sync_id = db.Column(db.Integer, db.ForeignKey('sync_log.sync_id'), primary_key=True)
     song_id = db.Column(db.Integer, db.ForeignKey('song.song_id'), primary_key=True)
-    action = db.Column(db.String(10), nullable=False)  # 'added' or 'removed'
+    action = db.Column(db.String(10), nullable=False)  # 'added', 'removed', or 'failed'
     timestamp = db.Column(db.DateTime, default=datetime.now)
 
 class UserFeedback(db.Model):

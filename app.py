@@ -64,7 +64,8 @@ def regex_preclean_youtube_title(title, channel_title=None):
         'lyrics', 'lyric video', 'music video', 'mv', 'hd', '4k', 'hq', 'full song',
         'complete song', 'extended', 'remix', 'cover', 'acoustic', 'live', 'studio version',
         'with lyrics', 'lyrics video', 'music video', 'mv', 'tribute to', 'song with lyrics',
-        'songs', 'song', 'full video song', 'full video', 'unplugged', 'sped up', 'slowed down'
+        'songs', 'song', 'full video song', 'full video', 'unplugged', 'sped up', 'slowed down',
+        'latest telugu superhits', 'telugu movie songs', 'movie songs', 'superhits'
     ]
     
     # Remove video descriptors (case insensitive)
@@ -72,40 +73,59 @@ def regex_preclean_youtube_title(title, channel_title=None):
         title = re.sub(rf'\s*-\s*{re.escape(descriptor)}\s*$', '', title, flags=re.IGNORECASE)
         title = re.sub(rf'\s*\({re.escape(descriptor)}\)', '', title, flags=re.IGNORECASE)
         title = re.sub(rf'\s*\[{re.escape(descriptor)}\]', '', title, flags=re.IGNORECASE)
+        title = re.sub(rf'\s*\|\s*{re.escape(descriptor)}', '', title, flags=re.IGNORECASE)
     
     # Handle specific patterns
-    # Pattern 1: "Artist - Song Name [Official Music Video]"
+    # Pattern 1: "Movie Name | Song Name | Artist | Music Director" (pipe separated)
+    if ' | ' in title:
+        parts = [part.strip() for part in title.split(' | ')]
+        if len(parts) >= 2:
+            # Look for the actual song name (usually the second part)
+            song_name = parts[1].strip()
+            artist_name = "Unknown Artist"
+            
+            # Try to find artist in later parts
+            for part in parts[2:]:
+                if not any(word in part.lower() for word in ['movie', 'film', 'video', 'song', 'music', 'director', 'composer', 'latest', 'superhits', 'telugu']):
+                    if len(part.split()) <= 4:  # Likely a person's name
+                        artist_name = part
+                        break
+            
+            # If no artist found, use channel name
+            if artist_name == "Unknown Artist" and channel_title:
+                artist_name = channel_title
+                
+            print(f"Pattern 1 (pipe) match: Song='{song_name}', Artist='{artist_name}'")
+            return song_name, artist_name
+    
+    # Pattern 2: "Artist - Song Name [Official Music Video]"
     if ' - ' in title and '[' in title:
         parts = title.split(' - ', 1)
         if len(parts) == 2:
             artist_name = parts[0].strip()
             song_part = parts[1].strip()
             song_name = re.sub(r'\s*\[.*?\]', '', song_part)
-            print(f"Pattern 1 match: Artist='{artist_name}', Song='{song_name}'")
+            print(f"Pattern 2 (dash + brackets) match: Artist='{artist_name}', Song='{song_name}'")
             return song_name, artist_name
     
-    # Pattern 2: "Song Name | Movie Name | Artist | Music Director"
-    if ' | ' in title:
-        parts = [part.strip() for part in title.split(' | ')]
-        if len(parts) >= 3:
-            song_name = parts[0].strip()
-            artist_name = "Unknown Artist"
-            for part in parts[1:]:
-                if not any(word in part.lower() for word in ['movie', 'film', 'video', 'song', 'music', 'director', 'composer']):
-                    if len(part.split()) <= 3:  # Likely a person's name
-                        artist_name = part
-                        break
-            print(f"Pattern 2 match: Song='{song_name}', Artist='{artist_name}'")
-            return song_name, artist_name
-    
-    # Pattern 3: "Artist - Song Name" (simple dash)
+    # Pattern 3: "Movie Name - Song Name" (movie first, then song)
     if ' - ' in title:
         parts = [part.strip() for part in title.split(' - ', 1)]
         if len(parts) == 2:
-            artist_name = parts[0].strip()
-            song_name = parts[1].strip()
-            print(f"Pattern 3 match: Artist='{artist_name}', Song='{song_name}'")
-            return song_name, artist_name
+            # Check if first part looks like a movie name (contains common movie words)
+            first_part = parts[0].lower()
+            if any(word in first_part for word in ['movie', 'film', 'songs', 'telugu', 'hindi', 'tamil', 'malayalam', 'kannada', 'bengali']):
+                # First part is movie name, second part is song
+                song_name = parts[1].strip()
+                artist_name = channel_title or "Unknown Artist"
+                print(f"Pattern 3 (movie-song) match: Song='{song_name}', Artist='{artist_name}'")
+                return song_name, artist_name
+            else:
+                # First part is artist, second part is song
+                artist_name = parts[0].strip()
+                song_name = parts[1].strip()
+                print(f"Pattern 3 (artist-song) match: Artist='{artist_name}', Song='{song_name}'")
+                return song_name, artist_name
     
     # Pattern 4: "Song Name by Artist"
     if ' by ' in title.lower():
@@ -113,7 +133,7 @@ def regex_preclean_youtube_title(title, channel_title=None):
         if len(parts) == 2:
             song_name = parts[0].strip()
             artist_name = parts[1].strip()
-            print(f"Pattern 4 match: Song='{song_name}', Artist='{artist_name}'")
+            print(f"Pattern 4 (by) match: Song='{song_name}', Artist='{artist_name}'")
             return song_name, artist_name
     
     # If no pattern matches, return the cleaned title as song name

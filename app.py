@@ -2622,6 +2622,14 @@ def connect_platform():
         platform_name = request.form['platform']
         
         if platform_name == 'Spotify':
+            # Generate a unique state parameter for this user's OAuth flow
+            import secrets
+            state = secrets.token_urlsafe(32)
+            
+            # Store the state in session with user-specific key
+            session[f'spotify_oauth_state_{current_user.user_id}'] = state
+            print(f"🔐 Generated Spotify OAuth state for user {current_user.user_id}: {state[:10]}...")
+            
             # Redirect to Spotify OAuth
             spotify_oauth = SpotifyOAuth(
                 client_id=SPOTIFY_CLIENT_ID,
@@ -2629,7 +2637,7 @@ def connect_platform():
                 redirect_uri=SPOTIFY_REDIRECT_URI,
                 scope='playlist-read-private playlist-read-collaborative user-read-private playlist-modify-public playlist-modify-private'
             )
-            auth_url = spotify_oauth.get_authorize_url(show_dialog=True)
+            auth_url = spotify_oauth.get_authorize_url(show_dialog=True, state=state)
             return redirect(auth_url)
         
         elif platform_name == 'YouTube':
@@ -2641,6 +2649,14 @@ def connect_platform():
                     db.session.add(platform)
                     db.session.commit()
                 
+                # Generate a unique state parameter for this user's OAuth flow
+                import secrets
+                state = secrets.token_urlsafe(32)
+                
+                # Store the state in session with user-specific key
+                session[f'youtube_oauth_state_{current_user.user_id}'] = state
+                print(f"🔐 Generated YouTube OAuth state for user {current_user.user_id}: {state[:10]}...")
+                
                 # Build Google OAuth URL
                 from urllib.parse import urlencode
                 params = {
@@ -2648,7 +2664,8 @@ def connect_platform():
                     'redirect_uri': YOUTUBE_REDIRECT_URI,
                     'scope': 'https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.force-ssl',
                     'response_type': 'code',
-                    'access_type': 'offline'
+                    'access_type': 'offline',
+                    'state': state
                 }
                 auth_url = f"https://accounts.google.com/o/oauth2/auth?{urlencode(params)}"
                 return redirect(auth_url)
@@ -2711,9 +2728,23 @@ def spotify_callback():
     """Handle Spotify OAuth callback"""
     try:
         code = request.args.get('code')
+        state = request.args.get('state')
+        
         if not code:
             flash('Spotify authorization failed')
             return redirect(url_for('dashboard'))
+        
+        # Validate state parameter to prevent cross-user contamination
+        expected_state = session.get(f'spotify_oauth_state_{current_user.user_id}')
+        if not state or not expected_state or state != expected_state:
+            print(f"❌ Invalid or missing state parameter for user {current_user.user_id}")
+            print(f"Expected: {expected_state}, Received: {state}")
+            flash('Spotify authorization failed: Invalid state parameter')
+            return redirect(url_for('dashboard'))
+        
+        # Clear the state parameter after validation
+        session.pop(f'spotify_oauth_state_{current_user.user_id}', None)
+        print(f"✅ Validated Spotify OAuth state for user {current_user.user_id}")
         
         # Clear any existing Spotify session data to prevent cross-user contamination
         session.pop('spotify_token', None)
@@ -2799,9 +2830,23 @@ def youtube_callback():
     """Handle YouTube OAuth callback"""
     try:
         code = request.args.get('code')
+        state = request.args.get('state')
+        
         if not code:
             flash('YouTube authorization failed')
             return redirect(url_for('dashboard'))
+        
+        # Validate state parameter to prevent cross-user contamination
+        expected_state = session.get(f'youtube_oauth_state_{current_user.user_id}')
+        if not state or not expected_state or state != expected_state:
+            print(f"❌ Invalid or missing state parameter for user {current_user.user_id}")
+            print(f"Expected: {expected_state}, Received: {state}")
+            flash('YouTube authorization failed: Invalid state parameter')
+            return redirect(url_for('dashboard'))
+        
+        # Clear the state parameter after validation
+        session.pop(f'youtube_oauth_state_{current_user.user_id}', None)
+        print(f"✅ Validated YouTube OAuth state for user {current_user.user_id}")
         
         # Exchange code for access token
         import requests

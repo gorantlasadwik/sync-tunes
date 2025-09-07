@@ -22,9 +22,6 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <p><strong>Debug Info:</strong></p>
-                        <pre>{{ track_data | tojson(indent=2) }}</pre>
-                        
                         <!-- Handle both old and new data structures -->
                         {% if track_data.get('song_info') %}
                             <p><strong>Song Info:</strong> {{ track_data['song_info'].get('title', 'No title') }}</p>

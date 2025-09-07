@@ -2487,14 +2487,6 @@ def sync_playlist_songs():
                                 'source': 'manual_selection',
                                 'spotify_track': None,
                                 'fallback_results': hybrid_result.get('fallback_results', [])
-                                })
-                        else:
-                            # Fallback to original song data
-                            songs_to_add_to_platform.append({
-                                'title': song.title,
-                                'artist': song.artist,
-                                'album': song.album,
-                                'duration': song.duration
                             })
                 else:
                     # For other sync types, use original song data

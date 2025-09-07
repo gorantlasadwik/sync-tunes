@@ -694,42 +694,27 @@ def fetch_youtube_playlists(user_id, access_token):
                             raw_title = snippet.get('title', 'Unknown Title')
                             channel_title = snippet.get('videoOwnerChannelTitle', 'Unknown Artist')
                             
-                            # Use new extraction system for bulk playlist fetching
-                            extraction_result = extract_song_new(
-                                video_title=raw_title,
-                                video_description="",
-                                channel_title=channel_title,
-                                video_metadata=None
-                            )
-                            
-                            if extraction_result:
-                                parsed_song_name = extraction_result['title']
-                                parsed_artist = extraction_result['artist']
-                            else:
-                                # Fallback to basic cleaning
-                                parsed_song_name = re.sub(r'[\(\[].*?[\)\]]', '', raw_title).strip()
-                                parsed_song_name = re.sub(r'\s*(official|lyrics|video|audio|hd|4k|full|song|music)', '', parsed_song_name, flags=re.IGNORECASE)
-                                parsed_artist = channel_title or 'Unknown Artist'
+                            # LAZY LOADING: Store original title as-is, process later during sync
+                            # This prevents API overload during playlist fetching
+                            parsed_song_name = raw_title  # Store original title
+                            parsed_artist = channel_title or 'Unknown Artist'
                             
                             # Log the parsing for debugging
                             print(f"YouTube title parsing (bulk): '{raw_title}' -> Song: '{parsed_song_name}', Artist: '{parsed_artist}'")
                             
-                            # Store the original YouTube title in the song's album field for later Gemini parsing
-                            # This way we can access it during sync without changing the database schema
-                            
-                            # Create or get song (USER-SPECIFIC)
+                            # Create or get song (USER-SPECIFIC) - Store original title directly
                             song = Song.query.filter_by(
                                 user_id=user_id,  # ✅ USER ISOLATION
-                                title=parsed_song_name,
+                                title=parsed_song_name,  # This is now the original YouTube title
                                 artist=parsed_artist
                             ).first()
                             
                             if not song:
                                 song = Song(
                                     user_id=user_id,  # ✅ USER ISOLATION
-                                    title=parsed_song_name,
+                                    title=parsed_song_name,  # Original YouTube title
                                     artist=parsed_artist,
-                                    album=f"YouTube_ORIGINAL:{raw_title}",  # Store original title for Gemini parsing
+                                    album="YouTube",  # Mark as YouTube source
                                     duration=0
                                 )
                                 db.session.add(song)
@@ -2463,47 +2448,45 @@ def sync_playlist_songs():
                     ).first()
                     
                     if platform_song:
-                        # Extract the original YouTube title from the album field
-                        original_title = song.album
-                        if original_title.startswith("YouTube_ORIGINAL:"):
-                            original_title = original_title.replace("YouTube_ORIGINAL:", "")
-                            video_id = platform_song.platform_specific_id
-                            print(f"Found original YouTube title: '{original_title}'")
+                        # For YouTube songs, the title is already the original YouTube title
+                        original_title = song.title  # Title is now the original YouTube title
+                        video_id = platform_song.platform_specific_id
+                        print(f"Processing YouTube title: '{original_title}'")
+                        
+                        # Use hybrid parsing approach (NEW EXTRACTION SYSTEM)
+                        hybrid_result = hybrid_song_parsing(original_title, song.artist, video_id, target_user_account.auth_token)
+                        
+                        if hybrid_result['success']:
+                            # Success - add to platform
+                            print(f"✅ Hybrid parsing successful: {hybrid_result['song_name']} by {hybrid_result['artist_name']} (method: {hybrid_result['method']})")
                             
-                            # Use hybrid parsing approach
-                            hybrid_result = hybrid_song_parsing(original_title, song.artist, video_id, target_user_account.auth_token)
+                            songs_to_add_to_platform.append({
+                                'title': hybrid_result['song_name'],
+                                'artist': hybrid_result['artist_name'],
+                                'album': hybrid_result['album_name'],
+                                'original_title': original_title,
+                                'duration': song.duration,
+                                'gemini_confidence': hybrid_result['confidence'],
+                                'channel_name': song.artist,
+                                'source': hybrid_result['method'],
+                                'spotify_track': hybrid_result.get('spotify_track'),
+                                'fallback_results': hybrid_result.get('fallback_results', [])
+                            })
+                        else:
+                            # Manual selection required
+                            print(f"⚠️ Manual selection required for: {hybrid_result['song_name']} by {hybrid_result['artist_name']}")
                             
-                            if hybrid_result['success']:
-                                # Success - add to platform
-                                print(f"✅ Hybrid parsing successful: {hybrid_result['song_name']} by {hybrid_result['artist_name']} (method: {hybrid_result['method']})")
-                                
-                                songs_to_add_to_platform.append({
-                                    'title': hybrid_result['song_name'],
-                                    'artist': hybrid_result['artist_name'],
-                                    'album': hybrid_result['album_name'],
-                                    'original_title': original_title,
-                                    'duration': song.duration,
-                                    'gemini_confidence': hybrid_result['confidence'],
-                                    'channel_name': song.artist,
-                                    'source': hybrid_result['method'],
-                                    'spotify_track': hybrid_result.get('spotify_track'),
-                                    'fallback_results': hybrid_result.get('fallback_results', [])
-                                })
-                            else:
-                                # Manual selection required
-                                print(f"⚠️ Manual selection required for: {hybrid_result['song_name']} by {hybrid_result['artist_name']}")
-                                
-                                songs_to_add_to_platform.append({
-                                    'title': hybrid_result['song_name'],
-                                    'artist': hybrid_result['artist_name'],
-                                    'album': hybrid_result['album_name'],
-                                    'original_title': original_title,
-                                    'duration': song.duration,
-                                    'gemini_confidence': 0.0,
-                                    'channel_name': song.artist,
-                                    'source': 'manual_selection',
-                                    'spotify_track': None,
-                                    'fallback_results': hybrid_result.get('fallback_results', [])
+                            songs_to_add_to_platform.append({
+                                'title': hybrid_result['song_name'],
+                                'artist': hybrid_result['artist_name'],
+                                'album': hybrid_result['album_name'],
+                                'original_title': original_title,
+                                'duration': song.duration,
+                                'gemini_confidence': 0.0,
+                                'channel_name': song.artist,
+                                'source': 'manual_selection',
+                                'spotify_track': None,
+                                'fallback_results': hybrid_result.get('fallback_results', [])
                                 })
                         else:
                             # Fallback to original song data

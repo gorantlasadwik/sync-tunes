@@ -1904,25 +1904,8 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         print(f"🔍 Debug - Error type: {type(e).__name__}")
                         # Continue to regular search
                 
-                # Check if manual selection is required
-                if song_info.get('source') == 'manual_selection' and song_info.get('fallback_results'):
-                    print(f"⚠️ Manual selection required for: '{song_info['title']}' by '{song_info['artist']}'")
-                    # Store for manual selection (user-specific)
-                    user_pending_key = f'pending_tracks_{current_user.user_id}'
-                    if user_pending_key not in session:
-                        session[user_pending_key] = []
-                    
-                    session[user_pending_key].append({
-                        'song_info': song_info,
-                        'spotify_track': None,
-                        'confidence': 0.0,
-                        'search_strategy': 'manual_selection',
-                        'fuzzy_scores': {},
-                        'fallback_results': song_info.get('fallback_results', [])
-                    })
-                    session.modified = True
-                    print(f"Stored for manual selection: {song_info['title']}")
-                    continue
+                # Note: Manual selection songs are now handled in sync_playlist_songs function
+                # This function only receives songs that are ready to be added to Spotify
                 
                 # Regular search approach: Try artist first, then album, then song name only
                 search_strategies = []
@@ -3456,29 +3439,57 @@ def sync_playlist_songs():
         # Commit database changes
         db.session.commit()
         
-        # Try to update the real platform playlist
+        # Separate songs that need manual selection from songs ready to be added
+        songs_ready_for_platform = []
+        pending_tracks = []
+        
+        for song_info in songs_to_add_to_platform:
+            if song_info.get('source') == 'manual_selection':
+                # Store for manual selection
+                pending_tracks.append({
+                    'song_info': song_info,
+                    'spotify_track': None,
+                    'confidence': 0.0,
+                    'search_strategy': 'manual_selection',
+                    'fuzzy_scores': {},
+                    'fallback_results': song_info.get('fallback_results', [])
+                })
+            else:
+                # Ready to be added to platform
+                songs_ready_for_platform.append(song_info)
+        
+        # Store pending tracks in session (user-specific)
+        if pending_tracks:
+            user_pending_key = f'pending_tracks_{current_user.user_id}'
+            if user_pending_key not in session:
+                session[user_pending_key] = []
+            session[user_pending_key].extend(pending_tracks)
+            session.modified = True
+        
+        # Try to update the real platform playlist (only for songs ready to be added)
         platform_songs_added = 0
         # Log to file for better debugging
         with open('/tmp/sync_debug.log', 'a') as f:
             f.write(f"=== SYNC DEBUG START ===\n")
             f.write(f"Sync debug - Platform: {platform.platform_name if platform else 'None'}\n")
             f.write(f"Sync debug - Target account token: {'Present' if target_user_account.auth_token else 'Missing'}\n")
-            f.write(f"Songs to add to platform: {len(songs_to_add_to_platform)}\n")
+            f.write(f"Songs ready for platform: {len(songs_ready_for_platform)}\n")
+            f.write(f"Songs requiring manual selection: {len(pending_tracks)}\n")
             f.write(f"Target playlist: {target_playlist.name if target_playlist else 'None'}\n")
             f.write(f"Target playlist platform ID: {target_playlist.platform_playlist_id if target_playlist else 'None'}\n")
         
-        if platform and target_user_account.auth_token and songs_to_add_to_platform:
+        if platform and target_user_account.auth_token and songs_ready_for_platform:
             if platform.platform_name == 'YouTube':
                 platform_songs_added = update_youtube_playlist(
                     target_user_account.auth_token, 
                     target_playlist, 
-                    songs_to_add_to_platform
+                    songs_ready_for_platform
                 )
             elif platform.platform_name == 'Spotify':
                 platform_songs_added = update_spotify_playlist(
                     target_user_account.auth_token, 
                     target_playlist, 
-                    songs_to_add_to_platform
+                    songs_ready_for_platform
                 )
         
         # Create sync log - record the TARGET playlist where songs were added
@@ -3488,7 +3499,7 @@ def sync_playlist_songs():
             destination_account_id=target_user_account.account_id,
             playlist_id=target_playlist.playlist_id,  # Changed to target playlist
             total_songs_synced=songs_added,
-            songs_added=songs_added,
+            songs_added=platform_songs_added,  # Only count songs actually added to platform
             songs_removed=0,
             timestamp=datetime.now().date()
         )
@@ -3516,19 +3527,17 @@ def sync_playlist_songs():
         print(f"=== SYNC DEBUG END ===")
         print(f"Pending tracks in session: {len(pending_tracks)}")
         
-        if songs_added > 0:
-            if platform_songs_added > 0:
-                flash(f'Successfully synced {songs_added} songs! {platform_songs_added} songs added to {platform.platform_name} playlist. Note: Spotify UI may take a few minutes to update.')
-            else:
-                flash(f'Successfully synced {songs_added} songs! All songs were automatically added to {platform.platform_name} playlist. Note: Spotify UI may take a few minutes to update.')
+        if platform_songs_added > 0:
+            flash(f'Successfully added {platform_songs_added} songs to {platform.platform_name} playlist! Note: Spotify UI may take a few minutes to update.')
         elif songs_skipped > 0:
             flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist.')
+        elif len(pending_tracks) > 0:
+            flash(f'Found {len(pending_tracks)} songs that could not be found on Spotify. Please review and select alternative tracks.')
         else:
             flash('No songs were selected for syncing.')
         
         # If there are pending tracks (songs not found), redirect to confirmation page
         if pending_tracks:
-            flash(f'Found {len(pending_tracks)} songs that could not be found on Spotify. Please review and select alternative tracks.')
             return redirect(url_for('confirm_fallback_tracks'))
         
         return redirect(url_for('playlist_details', playlist_id=source_playlist_id))

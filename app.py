@@ -1160,18 +1160,18 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         print(f"Stored poor match for user confirmation: {track['name']}")
                         # Continue to fallback search
                     
-                    # Try fallback search with Gemini re-analysis of full YouTube title
-                    print(f"All strategies failed, asking Gemini to re-analyze full YouTube title...")
-                    
-                    # Initialize pending_tracks for fallback results
-                    if f'pending_tracks_{current_user.user_id}' not in session:
-                        session[f'pending_tracks_{current_user.user_id}'] = []
-                    pending_tracks = session[f'pending_tracks_{current_user.user_id}']
-                    
-                    # Get the original YouTube title for re-analysis
-                    original_title = song_info.get('original_title', song_info['title'])
-                    channel_name = song_info.get('channel_name', 'Unknown')
-                    
+                        # Try fallback search with Gemini re-analysis of full YouTube title
+                        print(f"All strategies failed, asking Gemini to re-analyze full YouTube title...")
+                        
+                        # Initialize pending_tracks for fallback results
+                        if f'pending_tracks_{current_user.user_id}' not in session:
+                            session[f'pending_tracks_{current_user.user_id}'] = []
+                        pending_tracks = session[f'pending_tracks_{current_user.user_id}']
+                        
+                        # Get the original YouTube title for re-analysis
+                        original_title = song_info.get('original_title', song_info['title'])
+                        channel_name = song_info.get('channel_name', 'Unknown')
+                        
                     # Use new extraction system to re-analyze the full YouTube title
                     extraction_result = extract_song_new(
                         video_title=original_title,
@@ -1188,117 +1188,117 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         corrected_song_name = re.sub(r'[\(\[].*?[\)\]]', '', original_title).strip()
                         corrected_song_name = re.sub(r'\s*(official|lyrics|video|audio|hd|4k|full|song|music)', '', corrected_song_name, flags=re.IGNORECASE)
                         print(f"Fallback cleaning: '{original_title}' -> '{corrected_song_name}'")
-                    
-                    # Now search Spotify with the corrected song name using more targeted queries
-                    fallback_queries = [
-                        f'track:"{corrected_song_name}"',  # Exact phrase match
-                        f'"{corrected_song_name}"',        # Phrase search
-                        f'track:{corrected_song_name}',    # Standard search
-                        f'{corrected_song_name}',          # Simple search
-                    ]
-                    
-                    # Add artist-specific searches if we have artist info
-                    if song_info.get('artist') and song_info['artist'] != 'Unknown':
-                        artist_name = song_info['artist']
-                        fallback_queries.extend([
-                            f'track:"{corrected_song_name}" artist:"{artist_name}"',
-                            f'"{corrected_song_name}" "{artist_name}"',
-                            f'{corrected_song_name} {artist_name}',
-                        ])
-                    
-                    # Add album-specific searches if we have album info
-                    if song_info.get('album') and song_info['album'] != 'Unknown':
-                        album_name = song_info['album']
-                        fallback_queries.extend([
-                            f'track:"{corrected_song_name}" album:"{album_name}"',
-                            f'"{corrected_song_name}" "{album_name}"',
-                        ])
-                    
-                    fallback_results = None
-                    used_fallback_query = None
-                    
-                    for query in fallback_queries:
-                        print(f"Trying fallback query: {query}")
-                        fallback_results = sp.search(q=query, type='track', limit=10)  # Get more results
+                        
+                        # Now search Spotify with the corrected song name using more targeted queries
+                        fallback_queries = [
+                            f'track:"{corrected_song_name}"',  # Exact phrase match
+                            f'"{corrected_song_name}"',        # Phrase search
+                            f'track:{corrected_song_name}',    # Standard search
+                            f'{corrected_song_name}',          # Simple search
+                        ]
+                        
+                        # Add artist-specific searches if we have artist info
+                        if song_info.get('artist') and song_info['artist'] != 'Unknown':
+                            artist_name = song_info['artist']
+                            fallback_queries.extend([
+                                f'track:"{corrected_song_name}" artist:"{artist_name}"',
+                                f'"{corrected_song_name}" "{artist_name}"',
+                                f'{corrected_song_name} {artist_name}',
+                            ])
+                        
+                        # Add album-specific searches if we have album info
+                        if song_info.get('album') and song_info['album'] != 'Unknown':
+                            album_name = song_info['album']
+                            fallback_queries.extend([
+                                f'track:"{corrected_song_name}" album:"{album_name}"',
+                                f'"{corrected_song_name}" "{album_name}"',
+                            ])
+                        
+                        fallback_results = None
+                        used_fallback_query = None
+                        
+                        for query in fallback_queries:
+                            print(f"Trying fallback query: {query}")
+                            fallback_results = sp.search(q=query, type='track', limit=10)  # Get more results
+                            if fallback_results['tracks']['items']:
+                                used_fallback_query = query
+                                # Don't break immediately - try to get more diverse results
+                                if len(fallback_results['tracks']['items']) >= 5:
+                                    break
+                        
+                        print(f"Fallback search results: {len(fallback_results['tracks']['items'])} tracks found using query: {used_fallback_query}")
+                        
                         if fallback_results['tracks']['items']:
-                            used_fallback_query = query
-                            # Don't break immediately - try to get more diverse results
-                            if len(fallback_results['tracks']['items']) >= 5:
-                                break
-                    
-                    print(f"Fallback search results: {len(fallback_results['tracks']['items'])} tracks found using query: {used_fallback_query}")
-                    
-                    if fallback_results['tracks']['items']:
-                        print(f"Fallback search found {len(fallback_results['tracks']['items'])} tracks")
-                        
-                        # Find the best fallback matches using advanced fuzzy matching
-                        fallback_tracks = []
-                        
-                        for track in fallback_results['tracks']['items']:
-                            # Use the same advanced fuzzy matching as main search
-                            fuzzy_scores = advanced_fuzzy_match(corrected_song_name, song_info.get('artist', ''), track)
+                            print(f"Fallback search found {len(fallback_results['tracks']['items'])} tracks")
                             
-                            # Calculate confidence using the same method as main search
-                            fallback_confidence = calculate_confidence_score(
-                                song_info.get('gemini_confidence', 0.5),
-                                fuzzy_scores,
-                                'song_only',  # Fallback is always song-only search
-                                song_info.get('channel_name')
-                            )
+                            # Find the best fallback matches using advanced fuzzy matching
+                            fallback_tracks = []
                             
-                            print(f"Fallback validation: '{corrected_song_name}' vs '{track['name']}'")
-                            print(f"Fuzzy scores: {fuzzy_scores}")
-                            print(f"Fallback confidence: {fallback_confidence:.3f}")
-                            
-                            # Only include tracks with reasonable similarity
-                            if fuzzy_scores.get('title_simple_ratio', 0) >= 20:  # At least 20% similarity
-                                fallback_tracks.append({
-                                    'track': track,
-                                    'confidence': fallback_confidence,
-                                    'fuzzy_scores': fuzzy_scores
-                                })
-                        
-                        # Sort by confidence and take top 3
-                        fallback_tracks.sort(key=lambda x: x['confidence'], reverse=True)
-                        fallback_tracks = fallback_tracks[:3]  # Top 3 most relevant
-                        
-                        # Store fallback results for user confirmation
-                        if fallback_tracks:
-                            print(f"Found {len(fallback_tracks)} relevant fallback tracks")
-                            for i, fallback_data in enumerate(fallback_tracks):
-                                track = fallback_data['track']
-                                confidence = fallback_data['confidence']
-                                print(f"Fallback {i+1}: '{track['name']}' by {track['artists'][0]['name']} (confidence: {confidence:.3f})")
+                            for track in fallback_results['tracks']['items']:
+                                # Use the same advanced fuzzy matching as main search
+                                fuzzy_scores = advanced_fuzzy_match(corrected_song_name, song_info.get('artist', ''), track)
                                 
-                                # Calculate title similarity for user comparison
-                                original_title = song_info.get('original_title', song_info['title'])
-                                spotify_title = track['name']
-                                title_similarity = fuzz.ratio(original_title.lower(), spotify_title.lower())
+                                # Calculate confidence using the same method as main search
+                                fallback_confidence = calculate_confidence_score(
+                                    song_info.get('gemini_confidence', 0.5),
+                                    fuzzy_scores,
+                                    'song_only',  # Fallback is always song-only search
+                                    song_info.get('channel_name')
+                                )
                                 
-                                # Add to pending tracks for user confirmation
+                                print(f"Fallback validation: '{corrected_song_name}' vs '{track['name']}'")
+                                print(f"Fuzzy scores: {fuzzy_scores}")
+                                print(f"Fallback confidence: {fallback_confidence:.3f}")
+                                
+                                # Only include tracks with reasonable similarity
+                                if fuzzy_scores.get('title_simple_ratio', 0) >= 20:  # At least 20% similarity
+                                    fallback_tracks.append({
+                                        'track': track,
+                                        'confidence': fallback_confidence,
+                                        'fuzzy_scores': fuzzy_scores
+                                    })
+                            
+                            # Sort by confidence and take top 3
+                            fallback_tracks.sort(key=lambda x: x['confidence'], reverse=True)
+                            fallback_tracks = fallback_tracks[:3]  # Top 3 most relevant
+                            
+                            # Store fallback results for user confirmation
+                            if fallback_tracks:
+                                print(f"Found {len(fallback_tracks)} relevant fallback tracks")
+                                for i, fallback_data in enumerate(fallback_tracks):
+                                    track = fallback_data['track']
+                                    confidence = fallback_data['confidence']
+                                    print(f"Fallback {i+1}: '{track['name']}' by {track['artists'][0]['name']} (confidence: {confidence:.3f})")
+                                    
+                                    # Calculate title similarity for user comparison
+                                    original_title = song_info.get('original_title', song_info['title'])
+                                    spotify_title = track['name']
+                                    title_similarity = fuzz.ratio(original_title.lower(), spotify_title.lower())
+                                    
+                                    # Add to pending tracks for user confirmation
+                                    pending_tracks.append({
+                                        'song_info': song_info,
+                                        'spotify_track': track,
+                                        'confidence': confidence,
+                                        'search_strategy': 'fallback',
+                                        'fuzzy_scores': fallback_data['fuzzy_scores'],
+                                        'title_comparison': {
+                                            'original_youtube_title': original_title,
+                                            'spotify_title': spotify_title,
+                                            'similarity_percentage': title_similarity,
+                                            'is_similar': title_similarity >= 50  # 50%+ similarity
+                                        }
+                                    })
+                            else:
+                                print("No relevant fallback tracks found - will skip this song")
+                                # Add to pending tracks as "no match found"
                                 pending_tracks.append({
                                     'song_info': song_info,
-                                    'spotify_track': track,
-                                    'confidence': confidence,
-                                    'search_strategy': 'fallback',
-                                    'fuzzy_scores': fallback_data['fuzzy_scores'],
-                                    'title_comparison': {
-                                        'original_youtube_title': original_title,
-                                        'spotify_title': spotify_title,
-                                        'similarity_percentage': title_similarity,
-                                        'is_similar': title_similarity >= 50  # 50%+ similarity
-                                    }
+                                    'spotify_track': None,
+                                    'confidence': 0.0,
+                                    'search_strategy': 'no_match',
+                                    'fuzzy_scores': {}
                                 })
-                        else:
-                            print("No relevant fallback tracks found - will skip this song")
-                            # Add to pending tracks as "no match found"
-                            pending_tracks.append({
-                                'song_info': song_info,
-                                'spotify_track': None,
-                                'confidence': 0.0,
-                                'search_strategy': 'no_match',
-                                'fuzzy_scores': {}
-                            })
             except Exception as song_error:
                 print(f"Error processing song '{song_info['title']}': {song_error}")
                 continue
@@ -1314,6 +1314,83 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
         
     except Exception as e:
         print(f"Error updating Spotify playlist: {e}")
+        return 0
+
+def update_youtube_playlist_direct(access_token, target_playlist, songs_to_add, source_playlist):
+    """Direct YouTube → YouTube sync using video IDs (no search needed)"""
+    print(f"=== update_youtube_playlist_direct CALLED ===")
+    print(f"Target playlist: {target_playlist.name}")
+    print(f"Songs to add: {len(songs_to_add)}")
+    print("🎯 Using direct video ID mapping - no search required!")
+    
+    try:
+        import requests
+        
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+        
+        youtube_playlist_id = target_playlist.platform_playlist_id
+        if not youtube_playlist_id:
+            print(f"ERROR: No YouTube playlist ID found for target playlist '{target_playlist.name}'")
+            return 0
+        
+        songs_added = 0
+        
+        for song_info in songs_to_add:
+            try:
+                # Get the YouTube video ID from the source playlist's PlatformSong
+                platform_song = PlatformSong.query.join(Platform).filter(
+                    PlatformSong.song_id == song_info['song_id'],
+                    Platform.platform_name == 'YouTube',
+                    PlatformSong.platform_id == Platform.platform_id
+                ).first()
+                
+                if not platform_song or not platform_song.platform_specific_id:
+                    print(f"❌ No video ID found for song: {song_info['title']}")
+                    continue
+                
+                video_id = platform_song.platform_specific_id
+                print(f"🎯 Direct mapping: '{song_info['title']}' → Video ID: {video_id}")
+                
+                # Add video directly to target playlist using video ID
+                add_data = {
+                    'snippet': {
+                        'playlistId': youtube_playlist_id,
+                        'resourceId': {
+                            'kind': 'youtube#video',
+                            'videoId': video_id
+                        }
+                    }
+                }
+                
+                add_response = requests.post(
+                    'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet',
+                    headers=headers,
+                    data=json.dumps(add_data)
+                )
+                
+                print(f"YouTube direct add response: {add_response.status_code}")
+                if add_response.status_code == 200:
+                    songs_added += 1
+                    print(f"✅ Direct added: '{song_info['title']}' (Video ID: {video_id})")
+                elif add_response.status_code == 409:
+                    print(f"⚠️ Video already exists in playlist: '{song_info['title']}' (Video ID: {video_id})")
+                    songs_added += 1  # Count as success since it's already there
+                else:
+                    print(f"❌ Failed to add '{song_info['title']}': {add_response.text}")
+                    
+            except Exception as song_error:
+                print(f"❌ Error adding song '{song_info['title']}': {song_error}")
+                continue
+        
+        print(f"🎯 Direct sync completed: {songs_added}/{len(songs_to_add)} songs added")
+        return songs_added
+        
+    except Exception as e:
+        print(f"❌ Direct YouTube sync failed: {str(e)}")
         return 0
 
 def update_youtube_playlist(access_token, playlist, songs_to_add):
@@ -1455,7 +1532,11 @@ def sync_playlist_cross_platform(source_playlist, target_playlist, source_platfo
         songs_added = 0
         songs_failed = 0
         
-        if target_platform == 'Spotify':
+        # 🚀 OPTIMIZATION: Direct YouTube → YouTube sync using video IDs
+        if source_platform == 'YouTube' and target_platform == 'YouTube':
+            print("🎯 YouTube → YouTube sync detected: Using direct video ID mapping")
+            songs_added = update_youtube_playlist_direct(target_account.auth_token, target_playlist, source_songs, source_playlist)
+        elif target_platform == 'Spotify':
             songs_added = update_spotify_playlist(target_account.auth_token, target_playlist, source_songs)
         elif target_platform == 'YouTube':
             songs_added = update_youtube_playlist(target_account.auth_token, target_playlist, source_songs)
@@ -2505,10 +2586,10 @@ def sync_playlist_songs():
                         original_title = song.title  # Title is now the original YouTube title
                         video_id = platform_song.platform_specific_id
                         print(f"Processing YouTube title: '{original_title}'")
-                        
+                            
                         # Use hybrid parsing approach (NEW EXTRACTION SYSTEM)
                         hybrid_result = hybrid_song_parsing(original_title, song.artist, video_id, target_user_account.auth_token)
-                        
+                            
                         if hybrid_result['success']:
                             # Success - add to platform
                             print(f"✅ Hybrid parsing successful: {hybrid_result['song_name']} by {hybrid_result['artist_name']} (method: {hybrid_result['method']})")
@@ -2549,9 +2630,9 @@ def sync_playlist_songs():
                         'album': song.album,
                         'duration': song.duration
                     })
-                
-                # Commit database changes for this song
-                db.session.commit()
+                    
+                    # Commit database changes for this song
+                    db.session.commit()
             else:
                 # Song doesn't exist in database - this shouldn't happen in normal operation
                 print(f"Warning: Song ID {song_id} not found in database - skipping this song")

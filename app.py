@@ -541,14 +541,16 @@ def fetch_spotify_playlists(user_id, access_token):
             for track_data in tracks['items']:
                 track = track_data['track']
                 if track:
-                    # Create or get song
+                    # Create or get song (USER-SPECIFIC)
                     song = Song.query.filter_by(
+                        user_id=user_id,  # ✅ USER ISOLATION
                         title=track['name'],
                         artist=track['artists'][0]['name'] if track['artists'] else 'Unknown Artist'
                     ).first()
                     
                     if not song:
                         song = Song(
+                            user_id=user_id,  # ✅ USER ISOLATION
                             title=track['name'],
                             artist=track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
                             album=track['album']['name'] if track['album'] else 'Unknown Album',
@@ -715,14 +717,16 @@ def fetch_youtube_playlists(user_id, access_token):
                             # Store the original YouTube title in the song's album field for later Gemini parsing
                             # This way we can access it during sync without changing the database schema
                             
-                            # Create or get song
+                            # Create or get song (USER-SPECIFIC)
                             song = Song.query.filter_by(
+                                user_id=user_id,  # ✅ USER ISOLATION
                                 title=parsed_song_name,
                                 artist=parsed_artist
                             ).first()
                             
                             if not song:
                                 song = Song(
+                                    user_id=user_id,  # ✅ USER ISOLATION
                                     title=parsed_song_name,
                                     artist=parsed_artist,
                                     album=f"YouTube_ORIGINAL:{raw_title}",  # Store original title for Gemini parsing
@@ -1437,7 +1441,7 @@ def sync_playlist_cross_platform(source_playlist, target_playlist, source_platfo
         
         for ps in playlist_songs:
             song = db.session.get(Song, ps.song_id)
-            if song:
+            if song and song.user_id == current_user.user_id:  # ✅ USER ISOLATION CHECK
                 source_songs.append({
                     'title': song.title,
                     'artist': song.artist,
@@ -1506,6 +1510,7 @@ class Playlist(db.Model):
 
 class Song(db.Model):
     song_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('User_.user_id'), nullable=False)  # ✅ USER ISOLATION
     title = db.Column(db.String(200), nullable=False)
     artist = db.Column(db.String(150))
     album = db.Column(db.String(150))
@@ -3058,6 +3063,49 @@ def update_db():
         return 'Database updated with new tables!'
     except Exception as e:
         return f'Error updating database: {str(e)}'
+
+@app.route('/migrate_user_isolation')
+def migrate_user_isolation():
+    """Migrate existing songs to have user_id for user isolation"""
+    try:
+        from sqlalchemy import text
+        
+        # Check if user_id column exists
+        result = db.engine.execute(text("PRAGMA table_info(song)"))
+        columns = [row[1] for row in result]
+        
+        if 'user_id' not in columns:
+            # Add user_id column
+            db.engine.execute(text("ALTER TABLE song ADD COLUMN user_id INTEGER"))
+            print("✅ Added user_id column to song table")
+        
+        # Update existing songs to have user_id based on playlist ownership
+        # This is a complex migration - we'll assign songs to the first user who has them in a playlist
+        db.engine.execute(text("""
+            UPDATE song 
+            SET user_id = (
+                SELECT DISTINCT ua.user_id 
+                FROM playlist p 
+                JOIN user_platform_account ua ON p.account_id = ua.account_id 
+                JOIN playlist_song ps ON p.playlist_id = ps.playlist_id 
+                WHERE ps.song_id = song.song_id 
+                LIMIT 1
+            )
+            WHERE user_id IS NULL
+        """))
+        
+        # For songs not in any playlist, assign to admin user (user_id = 1) or delete them
+        db.engine.execute(text("""
+            DELETE FROM song 
+            WHERE user_id IS NULL
+        """))
+        
+        db.session.commit()
+        return 'User isolation migration completed successfully!'
+        
+    except Exception as e:
+        db.session.rollback()
+        return f'Migration error: {str(e)}'
 
 @app.route('/debug_platforms')
 @login_required

@@ -3,46 +3,23 @@
 {% block title %}Dashboard - Sync Tunes{% endblock %}
 
 {% block content %}
-<h1>Welcome, {{ current_user.name }}!</h1>
-
-<!-- Social Links Section -->
-<div class="card" style="background: linear-gradient(135deg, #0077b5, #00a0dc); border: none; margin-bottom: 1rem;">
-    <div class="card-header" style="background: transparent; border: none;">
-        <h3 class="card-title" style="color: white; margin: 0;">Connect with Me</h3>
-    </div>
-    <div style="padding: 1rem; text-align: center;">
-        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-                         <a href="https://www.linkedin.com/in/sadwik-gorantla-042362282/" 
-                target="_blank" 
-                class="btn" 
-                style="background: #0077b5; color: white; border: 2px solid white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 5px; transition: all 0.3s ease;">
-                <i class="fab fa-linkedin"></i> LinkedIn
-            </a>
-            <a href="https://github.com/gorantlasadwik" 
-               target="_blank" 
-               class="btn" 
-               style="background: #333; color: white; border: 2px solid white; padding: 0.5rem 1rem; text-decoration: none; border-radius: 5px; transition: all 0.3s ease;">
-                <i class="fab fa-github"></i> GitHub
-            </a>
-        </div>
-        <p style="color: white; margin: 1rem 0 0 0; font-size: 0.9rem; opacity: 0.9;">
-            Let's connect and collaborate on amazing projects! 🚀
-        </p>
-    </div>
-</div>
-
-<!-- AI Parsing Status Section -->
-<div class="card" style="background: linear-gradient(135deg, #4CAF50, #66BB6A); border: none; margin-bottom: 1rem;">
-    <div class="card-header" style="background: transparent; border: none;">
-        <h3 class="card-title" style="color: white; margin: 0;">AI Parsing Status</h3>
-    </div>
-    <div style="padding: 1rem; text-align: center;">
-        <p style="color: white; margin: 0 0 1rem 0; font-size: 0.9rem;">
-            Advanced AI parsing with Gemini + Groq fallback. Quotas reset automatically every 24 hours.
-        </p>
-        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 5px; font-size: 0.8rem; display: inline-block;">
-            <i class="fas fa-robot"></i> Gemini + Groq Fallback
-        </div>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h1 style="margin: 0;">Welcome, {{ current_user.name }}!</h1>
+    
+    <!-- Social Links - Top Right -->
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <a href="https://www.linkedin.com/in/sadwik-gorantla-042362282/" 
+           target="_blank" 
+           style="color: #0077b5; font-size: 2rem; text-decoration: none; transition: all 0.3s ease;"
+           title="Connect on LinkedIn">
+            <i class="fab fa-linkedin"></i>
+        </a>
+        <a href="https://github.com/gorantlasadwik" 
+           target="_blank" 
+           style="color: #333; font-size: 2rem; text-decoration: none; transition: all 0.3s ease;"
+           title="View GitHub Profile">
+            <i class="fab fa-github"></i>
+        </a>
     </div>
 </div>
 
@@ -237,6 +214,21 @@
     
     <div class="text-center">
         <a href="{{ url_for('logs') }}" class="btn btn-secondary">View All Logs</a>
+    </div>
+</div>
+
+<!-- AI Parsing Status Section - Moved to Bottom -->
+<div class="card" style="background: linear-gradient(135deg, #4CAF50, #66BB6A); border: none; margin-top: 2rem;">
+    <div class="card-header" style="background: transparent; border: none;">
+        <h3 class="card-title" style="color: white; margin: 0;">🤖 AI Parsing Status</h3>
+    </div>
+    <div style="padding: 1rem; text-align: center;">
+        <p style="color: white; margin: 0 0 1rem 0; font-size: 0.9rem;">
+            Advanced AI parsing with Gemini + Groq fallback. Quotas reset automatically every 24 hours.
+        </p>
+        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 5px; font-size: 0.8rem; display: inline-block;">
+            <i class="fas fa-robot"></i> Gemini + Groq Fallback
+        </div>
     </div>
 </div>
 {% endblock %}

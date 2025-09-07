@@ -2513,12 +2513,18 @@ def login():
         # Try to find user
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
+            # Clear any existing session data to prevent cross-user contamination
+            session.clear()
+            print(f"🧹 Cleared session data for new login: {user.email}")
             login_user(user)
             return redirect(url_for('dashboard'))
         
         # Try to find admin
         admin = Admin.query.filter_by(email=email).first()
         if admin and check_password_hash(admin.password, password):
+            # Clear any existing session data to prevent cross-user contamination
+            session.clear()
+            print(f"🧹 Cleared session data for new admin login: {admin.email}")
             login_user(admin)
             return redirect(url_for('admin_dashboard'))
         
@@ -2712,9 +2718,15 @@ def spotify_callback():
             flash('Spotify authorization failed')
             return redirect(url_for('dashboard'))
         
+        # Clear any existing Spotify session data to prevent cross-user contamination
+        session.pop('spotify_token', None)
+        session.pop('spotify_user_info', None)
+        print(f"🧹 Cleared existing Spotify session data for user {current_user.user_id}")
+        
         # Exchange code for access token
         print(f"Spotify OAuth config - Client ID: {SPOTIFY_CLIENT_ID[:10]}...")
         print(f"Spotify OAuth config - Redirect URI: {SPOTIFY_REDIRECT_URI}")
+        print(f"🔐 Processing Spotify callback for user: {current_user.user_id}")
         
         spotify_oauth = SpotifyOAuth(
             client_id=SPOTIFY_CLIENT_ID,
@@ -2732,6 +2744,7 @@ def spotify_callback():
         try:
             user_info = sp.current_user()
             print(f"Spotify callback - user info: {user_info}")
+            print(f"✅ Spotify user: {user_info.get('display_name', 'Unknown')} (ID: {user_info.get('id', 'Unknown')})")
         except Exception as e:
             print(f"Spotify callback error: {e}")
             if hasattr(e, 'http_status') and e.http_status == 403:
@@ -3792,6 +3805,9 @@ def logout():
         print(f"Error clearing platform connections: {e}")
         flash('Logged out successfully.')
     
+    # Clear all session data to prevent cross-user contamination
+    session.clear()
+    print(f"🧹 Cleared all session data on logout")
     logout_user()
     return redirect(url_for('index'))
 

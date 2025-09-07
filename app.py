@@ -2630,12 +2630,20 @@ def connect_platform():
             session[f'spotify_oauth_state_{current_user.user_id}'] = state
             print(f"🔐 Generated Spotify OAuth state for user {current_user.user_id}: {state[:10]}...")
             
-            # Redirect to Spotify OAuth
+            # Clear any existing Spotify cache files to prevent token contamination
+            import os
+            cache_file = f".spotify_cache_user_{current_user.user_id}.cache"
+            if os.path.exists(cache_file):
+                os.remove(cache_file)
+                print(f"🗑️ Cleared existing Spotify cache file for user {current_user.user_id}")
+            
+            # Redirect to Spotify OAuth with user-specific cache path
             spotify_oauth = SpotifyOAuth(
                 client_id=SPOTIFY_CLIENT_ID,
                 client_secret=SPOTIFY_CLIENT_SECRET,
                 redirect_uri=SPOTIFY_REDIRECT_URI,
-                scope='playlist-read-private playlist-read-collaborative user-read-private playlist-modify-public playlist-modify-private'
+                scope='playlist-read-private playlist-read-collaborative user-read-private playlist-modify-public playlist-modify-private',
+                cache_path=f".spotify_cache_user_{current_user.user_id}.cache"
             )
             auth_url = spotify_oauth.get_authorize_url(state=state)
             return redirect(auth_url)
@@ -2751,6 +2759,13 @@ def spotify_callback():
         session.pop('spotify_user_info', None)
         print(f"🧹 Cleared existing Spotify session data for user {current_user.user_id}")
         
+        # Clear any existing Spotify cache files to prevent token contamination
+        import os
+        cache_file = f".spotify_cache_user_{current_user.user_id}.cache"
+        if os.path.exists(cache_file):
+            os.remove(cache_file)
+            print(f"🗑️ Cleared existing Spotify cache file for user {current_user.user_id}")
+        
         # Exchange code for access token
         print(f"Spotify OAuth config - Client ID: {SPOTIFY_CLIENT_ID[:10]}...")
         print(f"Spotify OAuth config - Redirect URI: {SPOTIFY_REDIRECT_URI}")
@@ -2760,7 +2775,8 @@ def spotify_callback():
             client_id=SPOTIFY_CLIENT_ID,
             client_secret=SPOTIFY_CLIENT_SECRET,
             redirect_uri=SPOTIFY_REDIRECT_URI,
-            scope='playlist-read-private playlist-read-collaborative user-read-private playlist-modify-public playlist-modify-private'
+            scope='playlist-read-private playlist-read-collaborative user-read-private playlist-modify-public playlist-modify-private',
+            cache_path=f".spotify_cache_user_{current_user.user_id}.cache"
         )
         
         token_info = spotify_oauth.get_access_token(code)

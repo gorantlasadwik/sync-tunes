@@ -3467,36 +3467,19 @@ def sync_playlist_songs():
             f.write(f"Target playlist: {target_playlist.name if target_playlist else 'None'}\n")
             f.write(f"Target playlist platform ID: {target_playlist.platform_playlist_id if target_playlist else 'None'}\n")
         
-        print(f"=== SYNC DEBUG START ===")
-        print(f"Sync debug - Platform: {platform.platform_name if platform else 'None'}")
-        print(f"Sync debug - User account token: {'Present' if user_account.auth_token else 'Missing'}")
-        print(f"Songs to add to platform: {len(songs_to_add_to_platform)}")
-        print(f"Target playlist: {target_playlist.name if target_playlist else 'None'}")
-        print(f"Target playlist platform ID: {target_playlist.platform_playlist_id if target_playlist else 'None'}")
-        
         if platform and target_user_account.auth_token and songs_to_add_to_platform:
             if platform.platform_name == 'YouTube':
-                print("=== CALLING update_youtube_playlist ===")
                 platform_songs_added = update_youtube_playlist(
                     target_user_account.auth_token, 
                     target_playlist, 
                     songs_to_add_to_platform
                 )
-                print(f"YouTube sync result: {platform_songs_added} songs added")
             elif platform.platform_name == 'Spotify':
-                print("=== CALLING update_spotify_playlist ===")
                 platform_songs_added = update_spotify_playlist(
                     target_user_account.auth_token, 
                     target_playlist, 
                     songs_to_add_to_platform
                 )
-                print(f"Spotify sync result: {platform_songs_added} songs added")
-        else:
-            print("=== SYNC CONDITIONS NOT MET ===")
-            print(f"Platform exists: {platform is not None}")
-            print(f"Target account token exists: {target_user_account.auth_token is not None}")
-            print(f"Songs to add exists: {len(songs_to_add_to_platform) > 0}")
-        print(f"=== SYNC DEBUG END ===")
         
         # Create sync log - record the TARGET playlist where songs were added
         sync_log = SyncLog(
@@ -3545,7 +3528,6 @@ def sync_playlist_songs():
         
         # If there are pending tracks (songs not found), redirect to confirmation page
         if pending_tracks:
-            print(f"Redirecting to confirmation page with {len(pending_tracks)} pending tracks")
             flash(f'Found {len(pending_tracks)} songs that could not be found on Spotify. Please review and select alternative tracks.')
             return redirect(url_for('confirm_fallback_tracks'))
         
@@ -3562,8 +3544,6 @@ def confirm_fallback_tracks():
     """Show fallback tracks for user confirmation"""
     try:
         pending_tracks = session.get(f'pending_tracks_{current_user.user_id}', [])
-        print(f"DEBUG: Pending tracks count: {len(pending_tracks)}")
-        print(f"DEBUG: Pending tracks data: {pending_tracks}")
         
         if not pending_tracks:
             flash('No pending tracks to confirm.')
@@ -3571,7 +3551,6 @@ def confirm_fallback_tracks():
         
         # Validate data structure (handle both old and new formats)
         for i, track_data in enumerate(pending_tracks):
-            print(f"DEBUG: Track {i}: {track_data}")
             # Check for new data structure
             if 'song_info' not in track_data and 'original_song' not in track_data:
                 print(f"ERROR: Track {i} missing both 'song_info' and 'original_song' keys")

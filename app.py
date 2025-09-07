@@ -3444,15 +3444,18 @@ def sync_playlist_songs():
         pending_tracks = []
         
         for song_info in songs_to_add_to_platform:
-            if song_info.get('source') == 'manual_selection':
-                # Store for manual selection
+            if song_info.get('source') in ['manual_selection', 'ai_comparison']:
+                # Store for manual selection or AI comparison
                 pending_tracks.append({
                     'song_info': song_info,
                     'spotify_track': None,
                     'confidence': 0.0,
-                    'search_strategy': 'manual_selection',
+                    'search_strategy': song_info.get('source'),
                     'fuzzy_scores': {},
-                    'fallback_results': song_info.get('fallback_results', [])
+                    'fallback_results': song_info.get('fallback_results', []),
+                    'ai_results': song_info.get('ai_results', {}),
+                    'target_playlist_id': target_playlist.platform_playlist_id,  # Store target playlist ID
+                    'target_playlist_name': target_playlist.name
                 })
             else:
                 # Ready to be added to platform
@@ -3569,6 +3572,85 @@ def confirm_fallback_tracks():
         flash(f'Error loading fallback tracks: {str(e)}')
         return redirect(url_for('dashboard'))
 
+@app.route('/confirm_ai_result', methods=['POST'])
+@login_required
+def confirm_ai_result():
+    """Confirm an AI result selection (Gemini vs Groq)"""
+    try:
+        track_index = int(request.form.get('track_index'))
+        ai_choice = request.form.get('ai_choice')  # 'gemini' or 'groq'
+        
+        pending_tracks = session.get(f'pending_tracks_{current_user.user_id}', [])
+        if track_index >= len(pending_tracks):
+            flash('Invalid track selection.')
+            return redirect(url_for('confirm_fallback_tracks'))
+        
+        track_data = pending_tracks[track_index]
+        ai_results = track_data.get('ai_results', {})
+        
+        if ai_choice not in ai_results:
+            flash('Invalid AI choice.')
+            return redirect(url_for('confirm_fallback_tracks'))
+        
+        # Get the selected AI result
+        selected_result = ai_results[ai_choice]
+        
+        # Get playlist ID from the stored target playlist information
+        playlist_id = track_data.get('target_playlist_id')
+        if not playlist_id:
+            flash('Target playlist information not found.')
+            return redirect(url_for('confirm_fallback_tracks'))
+        
+        # Search Spotify for the AI result
+        try:
+            # Get user's Spotify account
+            platform = Platform.query.filter_by(platform_name='Spotify').first()
+            if not platform:
+                flash('Spotify platform not found.')
+                return redirect(url_for('confirm_fallback_tracks'))
+            
+            user_account = UserPlatformAccount.query.filter_by(
+                user_id=current_user.user_id,
+                platform_id=platform.platform_id
+            ).first()
+            
+            if not user_account or not user_account.auth_token:
+                flash('Spotify account not connected.')
+                return redirect(url_for('confirm_fallback_tracks'))
+            
+            # Search Spotify for the AI result
+            sp = spotipy.Spotify(auth=user_account.auth_token)
+            search_query = f'track:"{selected_result["song_name"]}" artist:"{selected_result["artist_name"]}"'
+            results = sp.search(q=search_query, type='track', limit=1)
+            
+            if results['tracks']['items']:
+                spotify_track = results['tracks']['items'][0]
+                
+                # Add track to playlist
+                sp.playlist_add_items(playlist_id, [spotify_track['uri']])
+                
+                # Remove this track from pending tracks
+                pending_tracks.pop(track_index)
+                session[f'pending_tracks_{current_user.user_id}'] = pending_tracks
+                session.modified = True
+                
+                flash(f'Successfully added "{spotify_track["name"]}" by {spotify_track["artists"][0]["name"]} to your playlist!')
+            else:
+                flash(f'Could not find "{selected_result["song_name"]}" by {selected_result["artist_name"]} on Spotify.')
+                
+        except Exception as e:
+            flash(f'Error adding track to playlist: {str(e)}')
+        
+        # Redirect back to confirmation page
+        if pending_tracks:
+            return redirect(url_for('confirm_fallback_tracks'))
+        else:
+            return redirect(url_for('dashboard'))
+            
+    except Exception as e:
+        flash(f'Error processing AI result: {str(e)}')
+        return redirect(url_for('confirm_fallback_tracks'))
+
 @app.route('/confirm_track', methods=['POST'])
 @login_required
 def confirm_track():
@@ -3589,8 +3671,11 @@ def confirm_track():
         selected_track = track_data['spotify_track']
         song_info = track_data['song_info']
         
-        # Get playlist ID from the song info or use a default
-        playlist_id = song_info.get('playlist_id')
+        # Get playlist ID from the stored target playlist information
+        playlist_id = track_data.get('target_playlist_id')
+        if not playlist_id:
+            flash('Target playlist information not found.')
+            return redirect(url_for('confirm_fallback_tracks'))
         
         # Add the selected track to Spotify playlist
         try:

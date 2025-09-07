@@ -37,6 +37,50 @@
                                     <i class="fas fa-check"></i> Add This Track
                                 </button>
                             </form>
+                        {% elif track_data.get('ai_results') %}
+                            <p><strong>AI Comparison Results:</strong> Both Gemini and Groq gave different results</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-primary">
+                                        <div class="card-header bg-primary text-white">
+                                            <h6 class="mb-0"><i class="fas fa-robot"></i> Gemini AI Result</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p><strong>Song:</strong> {{ track_data['ai_results']['gemini']['song_name'] }}</p>
+                                            <p><strong>Artist:</strong> {{ track_data['ai_results']['gemini']['artist_name'] }}</p>
+                                            <p><strong>Album:</strong> {{ track_data['ai_results']['gemini']['album_name'] }}</p>
+                                            <p><strong>Confidence:</strong> {{ "%.1f"|format(track_data['ai_results']['gemini']['confidence'] * 100) }}%</p>
+                                            <form method="POST" action="{{ url_for('confirm_ai_result') }}" class="d-inline">
+                                                <input type="hidden" name="track_index" value="{{ track_index }}">
+                                                <input type="hidden" name="ai_choice" value="gemini">
+                                                <button type="submit" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-check"></i> Use Gemini Result
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-header bg-success text-white">
+                                            <h6 class="mb-0"><i class="fas fa-brain"></i> Groq AI Result</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p><strong>Song:</strong> {{ track_data['ai_results']['groq']['song_name'] }}</p>
+                                            <p><strong>Artist:</strong> {{ track_data['ai_results']['groq']['artist_name'] }}</p>
+                                            <p><strong>Album:</strong> {{ track_data['ai_results']['groq']['album_name'] }}</p>
+                                            <p><strong>Confidence:</strong> {{ "%.1f"|format(track_data['ai_results']['groq']['confidence'] * 100) }}%</p>
+                                            <form method="POST" action="{{ url_for('confirm_ai_result') }}" class="d-inline">
+                                                <input type="hidden" name="track_index" value="{{ track_index }}">
+                                                <input type="hidden" name="ai_choice" value="groq">
+                                                <button type="submit" class="btn btn-success btn-sm">
+                                                    <i class="fas fa-check"></i> Use Groq Result
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         {% elif track_data.get('fallback_results') %}
                             <p><strong>Fallback Results:</strong> {{ track_data['fallback_results']|length }} found</p>
                             {% for fallback_track in track_data['fallback_results'] %}

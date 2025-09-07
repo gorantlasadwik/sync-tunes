@@ -1716,6 +1716,8 @@ def advanced_fuzzy_match(song_title, artist_name, spotify_track):
         'composite_score': composite_score,
         'title_score': title_score,
         'artist_score': artist_score,
+        'title_simple_ratio': title_simple_ratio,
+        'artist_simple_ratio': artist_simple_ratio,
         'title_token_ratio': title_token_ratio,
         'artist_token_ratio': artist_token_ratio,
         'title_partial_ratio': title_partial_ratio,
@@ -1993,6 +1995,14 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         song_info.get('artist'), 
                         track
                     )
+                    
+                    # Debug logging
+                    print(f"🔍 Fuzzy matching debug:")
+                    print(f"  Original: '{song_info['title']}' by '{song_info.get('artist', 'Unknown')}'")
+                    print(f"  Spotify:  '{track['name']}' by '{track['artists'][0]['name']}'")
+                    print(f"  Title similarity: {fuzzy_scores.get('title_simple_ratio', 0)}%")
+                    print(f"  Artist similarity: {fuzzy_scores.get('artist_simple_ratio', 0)}%")
+                    print(f"  Composite score: {fuzzy_scores.get('composite_score', 0):.3f}")
                     
                     # Additional validation for problematic matches
                     spotify_title = track['name'].strip()

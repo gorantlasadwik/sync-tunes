@@ -2637,7 +2637,7 @@ def connect_platform():
                 redirect_uri=SPOTIFY_REDIRECT_URI,
                 scope='playlist-read-private playlist-read-collaborative user-read-private playlist-modify-public playlist-modify-private'
             )
-            auth_url = spotify_oauth.get_authorize_url(show_dialog=True, state=state)
+            auth_url = spotify_oauth.get_authorize_url(state=state)
             return redirect(auth_url)
         
         elif platform_name == 'YouTube':

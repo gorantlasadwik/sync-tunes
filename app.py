@@ -10,8 +10,9 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import google.generativeai as genai
-from thefuzz import fuzz
+from thefuzz import fuzz, process
 from groq import Groq
+from ytmusicapi import YTMusic
 
 # Load environment variables
 load_dotenv()
@@ -30,6 +31,14 @@ if GROQ_API_KEY:
     print(f"✅ Groq API configured with key: {GROQ_API_KEY[:10]}...")
 else:
     print("⚠️ Groq API key not found - will use fallback parsing only")
+
+# Initialize YouTube Music API
+try:
+    ytmusic = YTMusic()
+    print("✅ YouTube Music API initialized successfully")
+except Exception as e:
+    print(f"⚠️ YouTube Music API initialization failed: {e}")
+    ytmusic = None
 
 def check_and_reset_gemini_quota():
     """Check if 24 hours have passed since last quota reset and reset if needed - USER SPECIFIC"""
@@ -52,29 +61,264 @@ def check_and_reset_gemini_quota():
         session['gemini_quota_reset_time'] = current_time.isoformat()
         print(f"⏰ Gemini quota exceeded - will auto-reset in 24 hours for user {current_user.user_id}")
 
-def regex_preclean_youtube_title(title, channel_title=None):
-    """Step 1: Regex pre-cleaning for YouTube titles - fast and reliable"""
+# ============================================================================
+# NEW SONG EXTRACTION SYSTEM - EXACT PRIORITY ORDER
+# ============================================================================
+
+def get_licensed_metadata(video_metadata):
+    """Step 1: Licensed Metadata (YouTube video page)"""
+    if not video_metadata:
+        return None
+    
+    # Check for "Licensed to YouTube by" metadata
+    if "licensed" in str(video_metadata).lower():
+        # Extract licensed information if available
+        # This would need to be implemented based on how you get video metadata
+        print("🎵 Found licensed metadata")
+        return video_metadata.get("licensed_info")
+    
+    return None
+
+def get_from_ytmusic(query):
+    """Step 2: YouTube Music API (ytmusicapi)"""
+    if not ytmusic:
+        print("⚠️ YouTube Music API not available")
+        return None
+    
+    try:
+        print(f"🎵 Searching YouTube Music for: '{query}'")
+        results = ytmusic.search(query, filter="songs")
+        
+        if results and len(results) > 0:
+            top = results[0]
+            song_name = top.get('title', '').strip()
+            artist_name = top.get('artists', [{}])[0].get('name', '').strip()
+            
+            if song_name and artist_name:
+                print(f"✅ YouTube Music found: '{song_name}' by '{artist_name}'")
+                return {
+                    'title': song_name,
+                    'artist': artist_name,
+                    'album': top.get('album', {}).get('name', ''),
+                    'source': 'ytmusic'
+                }
+        
+        print("❌ No good YouTube Music results found")
+        return None
+        
+    except Exception as e:
+        print(f"❌ YouTube Music API error: {e}")
+        return None
+
+def clean_title_regex(title: str):
+    """Step 3: Regex Cleaning (Fallback Parser)"""
     if not title:
-        return "Unknown Title", "Unknown Artist"
+        return None
     
-    print(f"Step 1 - Regex pre-cleaning: '{title}'")
+    print(f"🧹 Regex cleaning: '{title}'")
     
-    # Remove common video descriptors
-    video_descriptors = [
-        'official video', 'official music video', 'official audio', 'official lyric video',
-        'lyrics', 'lyric video', 'music video', 'mv', 'hd', '4k', 'hq', 'full song',
-        'complete song', 'extended', 'remix', 'cover', 'acoustic', 'live', 'studio version',
-        'with lyrics', 'lyrics video', 'music video', 'mv', 'tribute to', 'song with lyrics',
-        'songs', 'song', 'full video song', 'full video', 'unplugged', 'sped up', 'slowed down',
-        'latest telugu superhits', 'telugu movie songs', 'movie songs', 'superhits'
+    # Remove brackets and common junk words
+    cleaned = re.sub(r"[\(\[].*?[\)\]]", "", title)
+    
+    # Remove common junk words
+    junk_words = [
+        "official video", "lyrics", "audio", "live", "remix", "cover", 
+        "slowed", "reverb", "extended", "full song", "hd", "4k", 
+        "music video", "official audio", "official", "video", "song"
     ]
     
-    # Remove video descriptors (case insensitive)
-    for descriptor in video_descriptors:
-        title = re.sub(rf'\s*-\s*{re.escape(descriptor)}\s*$', '', title, flags=re.IGNORECASE)
-        title = re.sub(rf'\s*\({re.escape(descriptor)}\)', '', title, flags=re.IGNORECASE)
-        title = re.sub(rf'\s*\[{re.escape(descriptor)}\]', '', title, flags=re.IGNORECASE)
-        title = re.sub(rf'\s*\|\s*{re.escape(descriptor)}', '', title, flags=re.IGNORECASE)
+    for word in junk_words:
+        cleaned = re.sub(word, "", cleaned, flags=re.IGNORECASE)
+    
+    # Clean up extra spaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    
+    # Split on "-" or "|" to find song name
+    parts = re.split(r"[-|]", cleaned)
+    if len(parts) > 1:
+        # Usually the second part is the song name
+        song = parts[1].strip()
+        artist = parts[0].strip()
+    else:
+        # Single part - use as song name
+        song = parts[0].strip()
+        artist = "Unknown Artist"
+    
+    if song and len(song) > 2:
+        print(f"✅ Regex cleaned: '{song}' by '{artist}'")
+        return {
+            'title': song,
+            'artist': artist,
+            'source': 'regex'
+        }
+    
+    print("❌ Regex cleaning failed")
+    return None
+
+def ai_extract_song_simple(title, description=""):
+    """Step 4: AI Extraction (Gemini / Groq) - Return only song name"""
+    if not title:
+        return None
+    
+    print(f"🤖 AI extraction for: '{title}'")
+    
+    # Try Gemini first
+    if GEMINI_API_KEY and not session.get('gemini_quota_exceeded', False):
+        try:
+            check_and_reset_gemini_quota()
+            if not session.get('gemini_quota_exceeded', False):
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                
+                prompt = f"""
+Extract ONLY the song name (not artist, not extra info) from this YouTube video title:
+
+Title: {title}
+Description: {description[:200] if description else "No description"}
+
+Return ONLY the song name as plain text. No quotes, no extra words, no artist names.
+Just the song title.
+
+Example:
+Input: "Ed Sheeran - Shape of You (Official Music Video)"
+Output: Shape of You
+
+Input: "Arijit Singh - Tum Hi Ho (Official Video) | Aashiqui 2"
+Output: Tum Hi Ho
+"""
+
+                response = model.generate_content(prompt)
+                song_name = response.text.strip()
+                
+                # Clean the response
+                song_name = re.sub(r'^["\']|["\']$', '', song_name)  # Remove quotes
+                song_name = song_name.strip()
+                
+                if song_name and len(song_name) > 2:
+                    print(f"✅ Gemini extracted: '{song_name}'")
+                    return {
+                        'title': song_name,
+                        'artist': 'Unknown Artist',
+                        'source': 'gemini'
+                    }
+                    
+        except Exception as e:
+            if "quota" in str(e).lower():
+                session['gemini_quota_exceeded'] = True
+                print(f"⚠️ Gemini quota exceeded: {e}")
+            else:
+                print(f"❌ Gemini error: {e}")
+    
+    # Try Groq as fallback
+    if GROQ_API_KEY:
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            
+            prompt = f"""
+Extract ONLY the song name from this YouTube video title:
+
+Title: {title}
+
+Return ONLY the song name as plain text. No quotes, no extra words.
+Just the song title.
+
+Example:
+Input: "Ed Sheeran - Shape of You (Official Music Video)"
+Output: Shape of You
+"""
+
+            response = client.chat.completions.create(
+                model="llama3-8b-8192",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=100
+            )
+            
+            song_name = response.choices[0].message.content.strip()
+            song_name = re.sub(r'^["\']|["\']$', '', song_name)
+            song_name = song_name.strip()
+            
+            if song_name and len(song_name) > 2:
+                print(f"✅ Groq extracted: '{song_name}'")
+                return {
+                    'title': song_name,
+                    'artist': 'Unknown Artist',
+                    'source': 'groq'
+                }
+                
+        except Exception as e:
+            print(f"❌ Groq error: {e}")
+    
+    print("❌ AI extraction failed")
+    return None
+
+def fuzzy_match_spotify(song_name, spotify_results, threshold=80):
+    """Step 5: Fuzzy Matching (thefuzz)"""
+    if not song_name or not spotify_results:
+        return None, 0
+    
+    print(f"🔍 Fuzzy matching: '{song_name}' against {len(spotify_results)} Spotify results")
+    
+    # Create choices for fuzzy matching
+    choices = []
+    for result in spotify_results:
+        track_name = result.get('name', '')
+        artist_name = result.get('artists', [{}])[0].get('name', '')
+        choices.append(f"{track_name} - {artist_name}")
+    
+    if not choices:
+        return None, 0
+    
+    # Find best match
+    match, score = process.extractOne(song_name, choices, scorer=fuzz.token_sort_ratio)
+    
+    print(f"🎯 Best match: '{match}' (score: {score}%)")
+    
+    if score >= threshold:
+        print(f"✅ Auto-accept: Score {score}% >= {threshold}%")
+        return match, score
+    else:
+        print(f"⚠️ Needs confirmation: Score {score}% < {threshold}%")
+        return match, score
+
+def extract_song_new(video_title, video_description="", channel_title="", video_metadata=None):
+    """Main orchestrator - Exact Priority Order Implementation"""
+    print(f"\n🎵 NEW EXTRACTION SYSTEM for: '{video_title}'")
+    
+    # Step 1: Licensed Metadata (if available)
+    licensed = get_licensed_metadata(video_metadata)
+    if licensed:
+        print("✅ Using licensed metadata")
+        return licensed
+    
+    # Step 2: YouTube Music API
+    ytmusic_result = get_from_ytmusic(video_title)
+    if ytmusic_result:
+        print("✅ Using YouTube Music API result")
+        return ytmusic_result
+    
+    # Step 3: Regex Cleaning
+    regex_result = clean_title_regex(video_title)
+    if regex_result:
+        print("✅ Using regex cleaning result")
+        return regex_result
+    
+    # Step 4: AI Extraction
+    ai_result = ai_extract_song_simple(video_title, video_description)
+    if ai_result:
+        print("✅ Using AI extraction result")
+        return ai_result
+    
+    # Step 5: Fallback - return basic cleaned title
+    fallback_title = re.sub(r'[\(\[].*?[\)\]]', '', video_title).strip()
+    fallback_title = re.sub(r'\s*(official|lyrics|video|audio|hd|4k|full|song|music)', '', fallback_title, flags=re.IGNORECASE)
+    
+    print("⚠️ Using fallback extraction")
+    return {
+        'title': fallback_title,
+        'artist': channel_title or 'Unknown Artist',
+        'source': 'fallback'
+    }
+    
     
     # Handle specific patterns
     # Pattern 1: "Movie Name - Song Name | Actor | Actress | Music Director" (dash + pipe)
@@ -194,67 +438,44 @@ def regex_preclean_youtube_title(title, channel_title=None):
     return title.strip(), (channel_title or "Unknown Artist")
 
 def hybrid_song_parsing(original_title, channel_title=None, video_id=None, access_token=None):
-    """Hybrid approach: regex pre-clean → Spotify search → ytmusicapi → AI recognition → manual selection"""
+    """NEW EXTRACTION SYSTEM - Exact Priority Order Implementation"""
     
-    print(f"=== HYBRID PARSING START ===")
+    print(f"=== NEW EXTRACTION SYSTEM START ===")
     print(f"Original title: '{original_title}'")
     print(f"Channel: '{channel_title or 'Unknown'}'")
     print(f"Video ID: '{video_id or 'None'}'")
     
-    # Step 1: Regex pre-cleaning (fastest, most reliable)
-    print(f"\n--- Step 1: Regex Pre-cleaning ---")
-    cleaned_song, cleaned_artist = regex_preclean_youtube_title(original_title, channel_title)
-    print(f"Regex result: Song='{cleaned_song}', Artist='{cleaned_artist}'")
+    # Use the new extraction system
+    extraction_result = extract_song_new(
+        video_title=original_title,
+        video_description="",  # Could be enhanced to get video description
+        channel_title=channel_title,
+        video_metadata=None  # Could be enhanced to get video metadata
+    )
     
-    # Step 2: Try Spotify search with cleaned title
-    print(f"\n--- Step 2: Spotify Search ---")
-    spotify_result = search_spotify_with_cleaned_title(cleaned_song, cleaned_artist, access_token)
-    if spotify_result:
-        print(f"✅ Spotify search successful: {spotify_result['name']} by {spotify_result['artists'][0]['name']}")
+    if extraction_result:
+        print(f"✅ NEW EXTRACTION SUCCESSFUL: {extraction_result['title']} by {extraction_result['artist']} (source: {extraction_result['source']})")
         return {
             'success': True,
-            'method': 'spotify_search',
-            'song_name': spotify_result['name'],
-            'artist_name': spotify_result['artists'][0]['name'],
-            'album_name': spotify_result['album']['name'],
-            'spotify_track': spotify_result,
-            'confidence': 0.9
-        }
-    
-    # Step 3: Fallback to YouTube Music API
-    print(f"\n--- Step 3: YouTube Music API ---")
-    ytmusic_song, ytmusic_artist, ytmusic_album, ytmusic_confidence = search_youtube_music_for_metadata(original_title, channel_title)
-    if ytmusic_song and ytmusic_confidence >= 0.7:
-        print(f"✅ YouTube Music successful: {ytmusic_song} by {ytmusic_artist}")
-        return {
-            'success': True,
-            'method': 'youtube_music',
-            'song_name': ytmusic_song,
-            'artist_name': ytmusic_artist,
-            'album_name': ytmusic_album,
+            'method': extraction_result['source'],
+            'song_name': extraction_result['title'],
+            'artist_name': extraction_result['artist'],
+            'album_name': extraction_result.get('album', ''),
             'spotify_track': None,  # Will search Spotify with this info
-            'confidence': ytmusic_confidence
+            'confidence': 0.9 if extraction_result['source'] in ['ytmusic', 'licensed'] else 0.7
         }
     
-    # Step 4: AI Recognition (Gemini + Groq fallback)
-    print(f"\n--- Step 4: AI Recognition ---")
-    ai_result = ai_recognition_fallback(original_title, channel_title, video_id)
-    if ai_result:
-        print(f"✅ AI recognition successful: {ai_result['song_name']} by {ai_result['artist_name']}")
-        return ai_result
-    
-    # Step 5: Manual selection fallback
-    print(f"\n--- Step 5: Manual Selection Required ---")
-    manual_results = get_spotify_fallback_results(cleaned_song, cleaned_artist, access_token)
+    # If new extraction system fails, return failure
+    print(f"❌ NEW EXTRACTION SYSTEM FAILED")
     return {
         'success': False,
-        'method': 'manual_selection',
-        'song_name': cleaned_song,
-        'artist_name': cleaned_artist,
+        'method': 'extraction_failed',
+        'song_name': original_title,
+        'artist_name': channel_title or 'Unknown Artist',
         'album_name': 'Unknown',
         'spotify_track': None,
         'confidence': 0.0,
-        'fallback_results': manual_results
+        'fallback_results': []
     }
 
 def search_spotify_with_cleaned_title(song_name, artist_name, access_token=None):

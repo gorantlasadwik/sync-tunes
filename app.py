@@ -187,21 +187,6 @@ def hybrid_song_parsing(original_title, channel_title=None, video_id=None, acces
     print(f"\n--- Step 2: Spotify Search ---")
     spotify_result = search_spotify_with_cleaned_title(cleaned_song, cleaned_artist, access_token)
     if spotify_result:
-        # Check if the extracted song name is suspiciously short (likely wrong extraction)
-        if len(cleaned_song.split()) <= 1 and len(cleaned_song) <= 10:
-            print(f"⚠️ Suspicious short song name extracted: '{cleaned_song}' - requiring manual confirmation")
-            manual_results = get_spotify_fallback_results(cleaned_song, cleaned_artist, access_token)
-            return {
-                'success': False,
-                'method': 'manual_selection',
-                'song_name': cleaned_song,
-                'artist_name': cleaned_artist,
-                'album_name': 'Unknown',
-                'spotify_track': None,
-                'confidence': 0.0,
-                'fallback_results': manual_results
-            }
-        
         print(f"✅ Spotify search successful: {spotify_result['name']} by {spotify_result['artists'][0]['name']}")
         return {
             'success': True,
@@ -3445,16 +3430,20 @@ def sync_playlist_songs():
         
         for song_info in songs_to_add_to_platform:
             if song_info.get('source') in ['manual_selection', 'ai_comparison']:
-                # Store for manual selection or AI comparison
+                # Store for manual selection or AI comparison (minimal data to avoid session cookie size issues)
                 pending_tracks.append({
-                    'song_info': song_info,
+                    'song_info': {
+                        'title': song_info.get('title'),
+                        'artist': song_info.get('artist'),
+                        'album': song_info.get('album'),
+                        'original_title': song_info.get('original_title')
+                    },
                     'spotify_track': None,
                     'confidence': 0.0,
                     'search_strategy': song_info.get('source'),
-                    'fuzzy_scores': {},
-                    'fallback_results': song_info.get('fallback_results', []),
+                    'fallback_results': song_info.get('fallback_results', [])[:3] if song_info.get('fallback_results') else [],  # Limit to 3 results
                     'ai_results': song_info.get('ai_results', {}),
-                    'target_playlist_id': target_playlist.platform_playlist_id,  # Store target playlist ID
+                    'target_playlist_id': target_playlist.platform_playlist_id,
                     'target_playlist_name': target_playlist.name
                 })
             else:
@@ -3528,8 +3517,13 @@ def sync_playlist_songs():
         # Check if there are pending tracks for user confirmation
         pending_tracks = session.get(f'pending_tracks_{current_user.user_id}', [])
         
-        if platform_songs_added > 0:
+        # Show comprehensive sync results
+        if platform_songs_added > 0 and len(pending_tracks) > 0:
+            flash(f'Successfully added {platform_songs_added} songs to {platform.platform_name} playlist! Found {len(pending_tracks)} songs that need your confirmation. Please review and select alternative tracks.')
+        elif platform_songs_added > 0:
             flash(f'Successfully added {platform_songs_added} songs to {platform.platform_name} playlist! Note: Spotify UI may take a few minutes to update.')
+        elif songs_skipped > 0 and len(pending_tracks) > 0:
+            flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist. Found {len(pending_tracks)} songs that need your confirmation.')
         elif songs_skipped > 0:
             flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist.')
         elif len(pending_tracks) > 0:

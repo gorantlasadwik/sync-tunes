@@ -3313,6 +3313,7 @@ def sync_playlist_songs():
         # Sync songs to database first
         songs_added = 0
         songs_skipped = 0
+        songs_not_found = 0  # Track songs that don't exist in database
         songs_to_add_to_platform = []
         synced_song_ids = []  # Track which songs were actually synced
         
@@ -3418,8 +3419,10 @@ def sync_playlist_songs():
                 })
         else:
             # Song doesn't exist in database - this shouldn't happen in normal operation
-            print(f"Warning: Song ID {song_id} not found in database")
+            print(f"Warning: Song ID {song_id} not found in database - skipping this song")
+            songs_not_found += 1
             # Skip this song and continue with the next one
+            continue
         
         # Commit database changes
         db.session.commit()
@@ -3518,18 +3521,28 @@ def sync_playlist_songs():
         pending_tracks = session.get(f'pending_tracks_{current_user.user_id}', [])
         
         # Show comprehensive sync results
-        if platform_songs_added > 0 and len(pending_tracks) > 0:
-            flash(f'Successfully added {platform_songs_added} songs to {platform.platform_name} playlist! Found {len(pending_tracks)} songs that need your confirmation. Please review and select alternative tracks.')
-        elif platform_songs_added > 0:
-            flash(f'Successfully added {platform_songs_added} songs to {platform.platform_name} playlist! Note: Spotify UI may take a few minutes to update.')
-        elif songs_skipped > 0 and len(pending_tracks) > 0:
-            flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist. Found {len(pending_tracks)} songs that need your confirmation.')
-        elif songs_skipped > 0:
-            flash(f'No new songs to sync - all {songs_skipped} selected songs already exist in the target playlist.')
-        elif len(pending_tracks) > 0:
-            flash(f'Found {len(pending_tracks)} songs that could not be found on Spotify. Please review and select alternative tracks.')
-        else:
-            flash('No songs were selected for syncing.')
+        messages = []
+        
+        if platform_songs_added > 0:
+            messages.append(f'Successfully added {platform_songs_added} songs to {platform.platform_name} playlist!')
+        
+        if songs_skipped > 0:
+            messages.append(f'{songs_skipped} songs already exist in the target playlist.')
+        
+        if songs_not_found > 0:
+            messages.append(f'{songs_not_found} songs were not found in the database and were skipped.')
+        
+        if len(pending_tracks) > 0:
+            messages.append(f'Found {len(pending_tracks)} songs that need your confirmation. Please review and select alternative tracks.')
+        
+        if not messages:
+            messages.append('No songs were selected for syncing.')
+        
+        # Add Spotify UI update note if songs were added
+        if platform_songs_added > 0:
+            messages.append('Note: Spotify UI may take a few minutes to update.')
+        
+        flash(' '.join(messages))
         
         # If there are pending tracks (songs not found), redirect to confirmation page
         if pending_tracks:

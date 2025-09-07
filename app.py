@@ -106,7 +106,30 @@ def regex_preclean_youtube_title(title, channel_title=None):
                 print(f"Pattern 1 (dash+pipe) match: Song='{song_name}', Artist='{artist_name}'")
                 return song_name, artist_name
     
-    # Pattern 2: "Movie Name | Song Name | Artist | Music Director" (pipe separated only)
+    # Pattern 2: "Song Name (Official Audio) Artist | Channel | Label" (song first, then artist)
+    if ' | ' in title and '(' in title and ')' in title:
+        # Extract song name from the beginning (before parentheses)
+        song_part = title.split('(')[0].strip()
+        if song_part:
+            # Find artist in the pipe-separated parts
+            parts = [part.strip() for part in title.split(' | ')]
+            artist_name = "Unknown Artist"
+            
+            # Look for artist in the parts (skip channel names and labels)
+            for part in parts:
+                if not any(word in part.lower() for word in ['dock', 'music', 'records', 'label', 'channel', 'official']):
+                    if len(part.split()) <= 3:  # Likely a person's name
+                        artist_name = part
+                        break
+            
+            # If no artist found, use channel name
+            if artist_name == "Unknown Artist" and channel_title:
+                artist_name = channel_title
+                
+            print(f"Pattern 2 (song-first with audio) match: Song='{song_part}', Artist='{artist_name}'")
+            return song_part, artist_name
+    
+    # Pattern 2b: "Movie Name | Song Name | Artist | Music Director" (pipe separated only)
     if ' | ' in title:
         parts = [part.strip() for part in title.split(' | ')]
         if len(parts) >= 2:
@@ -125,7 +148,7 @@ def regex_preclean_youtube_title(title, channel_title=None):
             if artist_name == "Unknown Artist" and channel_title:
                 artist_name = channel_title
                 
-            print(f"Pattern 2 (pipe only) match: Song='{song_name}', Artist='{artist_name}'")
+            print(f"Pattern 2b (pipe only) match: Song='{song_name}', Artist='{artist_name}'")
             return song_name, artist_name
     
     # Pattern 3: "Artist - Song Name [Official Music Video]"
@@ -1971,6 +1994,20 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                         track
                     )
                     
+                    # Additional validation for problematic matches
+                    spotify_title = track['name'].strip()
+                    spotify_artist = track['artists'][0]['name'].strip()
+                    
+                    # Reject matches with empty or very short titles
+                    if not spotify_title or len(spotify_title) < 2:
+                        print(f"❌ Rejecting match: Empty or too short Spotify title")
+                        continue
+                    
+                    # Reject matches where titles are completely different
+                    if fuzzy_scores.get('title_simple_ratio', 0) < 30:
+                        print(f"❌ Rejecting match: Title similarity too low ({fuzzy_scores.get('title_simple_ratio', 0)}%)")
+                        continue
+                    
                     # Calculate overall confidence score
                     overall_confidence = calculate_confidence_score(
                         song_info.get('gemini_confidence', 0.5),
@@ -1980,10 +2017,10 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     )
                     
                     # Confidence-based triage (STRICTER THRESHOLDS)
-                    if overall_confidence >= 0.90:  # Increased from 0.85
+                    if overall_confidence >= 0.95:  # Very high confidence only
                         match_quality = "HIGH"
                         is_good_match = True
-                    elif overall_confidence >= 0.80:  # Increased from 0.7
+                    elif overall_confidence >= 0.90:  # High confidence
                         match_quality = "MEDIUM"
                         is_good_match = True
                     elif overall_confidence >= 0.5:  # Increased from 0.4

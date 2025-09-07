@@ -3059,6 +3059,56 @@ def update_db():
     except Exception as e:
         return f'Error updating database: {str(e)}'
 
+@app.route('/debug_platforms')
+@login_required
+def debug_platforms():
+    """Debug route to check platform data"""
+    try:
+        # Get all platforms
+        platforms = Platform.query.all()
+        platform_data = []
+        for platform in platforms:
+            platform_data.append({
+                'platform_id': platform.platform_id,
+                'platform_name': platform.platform_name,
+                'api_details': platform.api_details
+            })
+        
+        # Get user's platform accounts
+        user_accounts = UserPlatformAccount.query.filter_by(user_id=current_user.user_id).all()
+        account_data = []
+        for account in user_accounts:
+            platform = db.session.get(Platform, account.platform_id)
+            account_data.append({
+                'account_id': account.account_id,
+                'platform_id': account.platform_id,
+                'platform_name': platform.platform_name if platform else 'Unknown',
+                'username': account.username_on_platform,
+                'has_token': bool(account.auth_token)
+            })
+        
+        # Get playlists with platform info
+        playlists = []
+        for account in user_accounts:
+            platform = db.session.get(Platform, account.platform_id)
+            account_playlists = Playlist.query.filter_by(account_id=account.account_id).all()
+            for playlist in account_playlists:
+                playlists.append({
+                    'playlist_id': playlist.playlist_id,
+                    'name': playlist.name,
+                    'account_id': playlist.account_id,
+                    'platform_id': account.platform_id,
+                    'platform_name': platform.platform_name if platform else 'Unknown'
+                })
+        
+        return jsonify({
+            'platforms': platform_data,
+            'user_accounts': account_data,
+            'playlists': playlists
+        })
+    except Exception as e:
+        return f'Debug error: {str(e)}', 500
+
 if __name__ == '__main__':
     # Ensure SQLAlchemy uses modern syntax
     from sqlalchemy import text

@@ -692,8 +692,22 @@ def fetch_youtube_playlists(user_id, access_token):
                             raw_title = snippet.get('title', 'Unknown Title')
                             channel_title = snippet.get('videoOwnerChannelTitle', 'Unknown Artist')
                             
-                            # Use fallback parser for bulk playlist fetching to avoid API limits
-                            parsed_song_name, parsed_artist = parse_youtube_title_fallback(raw_title, channel_title)
+                            # Use new extraction system for bulk playlist fetching
+                            extraction_result = extract_song_new(
+                                video_title=raw_title,
+                                video_description="",
+                                channel_title=channel_title,
+                                video_metadata=None
+                            )
+                            
+                            if extraction_result:
+                                parsed_song_name = extraction_result['title']
+                                parsed_artist = extraction_result['artist']
+                            else:
+                                # Fallback to basic cleaning
+                                parsed_song_name = re.sub(r'[\(\[].*?[\)\]]', '', raw_title).strip()
+                                parsed_song_name = re.sub(r'\s*(official|lyrics|video|audio|hd|4k|full|song|music)', '', parsed_song_name, flags=re.IGNORECASE)
+                                parsed_artist = channel_title or 'Unknown Artist'
                             
                             # Log the parsing for debugging
                             print(f"YouTube title parsing (bulk): '{raw_title}' -> Song: '{parsed_song_name}', Artist: '{parsed_artist}'")
@@ -1169,22 +1183,22 @@ def update_spotify_playlist(access_token, playlist, songs_to_add):
                     original_title = song_info.get('original_title', song_info['title'])
                     channel_name = song_info.get('channel_name', 'Unknown')
                     
-                    # Ask Gemini to extract the correct song name from the full YouTube title
-                    corrected_song_name, _ = parse_youtube_title_with_gemini(original_title, channel_name)
+                    # Use new extraction system to re-analyze the full YouTube title
+                    extraction_result = extract_song_new(
+                        video_title=original_title,
+                        video_description="",
+                        channel_title=channel_name,
+                        video_metadata=None
+                    )
                     
-                    print(f"Gemini re-analysis: '{original_title}' -> '{corrected_song_name}'")
-                    
-                    # Also try Gemini with YouTube URL for more accurate results
-                    video_id = song_info.get('video_id')
-                    if video_id:
-                        print(f"Trying Gemini with YouTube URL for more accurate results...")
-                        url_song_name, url_artist_name, url_album_name, url_confidence = get_spotify_song_name_from_youtube_url(
-                            video_id, original_title, channel_name
-                        )
-                        
-                        if url_song_name and url_confidence >= 0.6:
-                            print(f"Gemini URL analysis found better result: '{url_song_name}' (confidence: {url_confidence:.2f})")
-                            corrected_song_name = url_song_name  # Use the more accurate result
+                    if extraction_result:
+                        corrected_song_name = extraction_result['title']
+                        print(f"New extraction system re-analysis: '{original_title}' -> '{corrected_song_name}'")
+                    else:
+                        # Fallback to basic cleaning
+                        corrected_song_name = re.sub(r'[\(\[].*?[\)\]]', '', original_title).strip()
+                        corrected_song_name = re.sub(r'\s*(official|lyrics|video|audio|hd|4k|full|song|music)', '', corrected_song_name, flags=re.IGNORECASE)
+                        print(f"Fallback cleaning: '{original_title}' -> '{corrected_song_name}'")
                     
                     # Now search Spotify with the corrected song name using more targeted queries
                     fallback_queries = [

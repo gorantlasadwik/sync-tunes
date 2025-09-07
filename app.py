@@ -76,7 +76,36 @@ def regex_preclean_youtube_title(title, channel_title=None):
         title = re.sub(rf'\s*\|\s*{re.escape(descriptor)}', '', title, flags=re.IGNORECASE)
     
     # Handle specific patterns
-    # Pattern 1: "Movie Name | Song Name | Artist | Music Director" (pipe separated)
+    # Pattern 1: "Movie Name - Song Name | Actor | Actress | Music Director" (dash + pipe)
+    if ' - ' in title and ' | ' in title:
+        # Split by dash first
+        dash_parts = [part.strip() for part in title.split(' - ', 1)]
+        if len(dash_parts) == 2:
+            movie_part = dash_parts[0].strip()
+            rest_part = dash_parts[1].strip()
+            
+            # Split the rest by pipe
+            pipe_parts = [part.strip() for part in rest_part.split(' | ')]
+            if len(pipe_parts) >= 1:
+                # First part after dash is usually the song name
+                song_name = pipe_parts[0].strip()
+                artist_name = "Unknown Artist"
+                
+                # Try to find artist in later parts (skip actor names)
+                for part in pipe_parts[1:]:
+                    if not any(word in part.lower() for word in ['movie', 'film', 'video', 'song', 'music', 'director', 'composer', 'latest', 'superhits', 'telugu', 'lyrical']):
+                        if len(part.split()) <= 4:  # Likely a person's name
+                            artist_name = part
+                            break
+                
+                # If no artist found, use channel name
+                if artist_name == "Unknown Artist" and channel_title:
+                    artist_name = channel_title
+                    
+                print(f"Pattern 1 (dash+pipe) match: Song='{song_name}', Artist='{artist_name}'")
+                return song_name, artist_name
+    
+    # Pattern 2: "Movie Name | Song Name | Artist | Music Director" (pipe separated only)
     if ' | ' in title:
         parts = [part.strip() for part in title.split(' | ')]
         if len(parts) >= 2:
@@ -95,20 +124,20 @@ def regex_preclean_youtube_title(title, channel_title=None):
             if artist_name == "Unknown Artist" and channel_title:
                 artist_name = channel_title
                 
-            print(f"Pattern 1 (pipe) match: Song='{song_name}', Artist='{artist_name}'")
+            print(f"Pattern 2 (pipe only) match: Song='{song_name}', Artist='{artist_name}'")
             return song_name, artist_name
     
-    # Pattern 2: "Artist - Song Name [Official Music Video]"
+    # Pattern 3: "Artist - Song Name [Official Music Video]"
     if ' - ' in title and '[' in title:
         parts = title.split(' - ', 1)
         if len(parts) == 2:
             artist_name = parts[0].strip()
             song_part = parts[1].strip()
             song_name = re.sub(r'\s*\[.*?\]', '', song_part)
-            print(f"Pattern 2 (dash + brackets) match: Artist='{artist_name}', Song='{song_name}'")
+            print(f"Pattern 3 (dash + brackets) match: Artist='{artist_name}', Song='{song_name}'")
             return song_name, artist_name
     
-    # Pattern 3: "Movie Name - Song Name" (movie first, then song)
+    # Pattern 4: "Movie Name - Song Name" (movie first, then song)
     if ' - ' in title:
         parts = [part.strip() for part in title.split(' - ', 1)]
         if len(parts) == 2:
@@ -118,22 +147,22 @@ def regex_preclean_youtube_title(title, channel_title=None):
                 # First part is movie name, second part is song
                 song_name = parts[1].strip()
                 artist_name = channel_title or "Unknown Artist"
-                print(f"Pattern 3 (movie-song) match: Song='{song_name}', Artist='{artist_name}'")
+                print(f"Pattern 4 (movie-song) match: Song='{song_name}', Artist='{artist_name}'")
                 return song_name, artist_name
             else:
                 # First part is artist, second part is song
                 artist_name = parts[0].strip()
                 song_name = parts[1].strip()
-                print(f"Pattern 3 (artist-song) match: Artist='{artist_name}', Song='{song_name}'")
+                print(f"Pattern 4 (artist-song) match: Artist='{artist_name}', Song='{song_name}'")
                 return song_name, artist_name
     
-    # Pattern 4: "Song Name by Artist"
+    # Pattern 5: "Song Name by Artist"
     if ' by ' in title.lower():
         parts = title.split(' by ', 1)
         if len(parts) == 2:
             song_name = parts[0].strip()
             artist_name = parts[1].strip()
-            print(f"Pattern 4 (by) match: Song='{song_name}', Artist='{artist_name}'")
+            print(f"Pattern 5 (by) match: Song='{song_name}', Artist='{artist_name}'")
             return song_name, artist_name
     
     # If no pattern matches, return the cleaned title as song name
@@ -157,6 +186,21 @@ def hybrid_song_parsing(original_title, channel_title=None, video_id=None, acces
     print(f"\n--- Step 2: Spotify Search ---")
     spotify_result = search_spotify_with_cleaned_title(cleaned_song, cleaned_artist, access_token)
     if spotify_result:
+        # Check if the extracted song name is suspiciously short (likely wrong extraction)
+        if len(cleaned_song.split()) <= 1 and len(cleaned_song) <= 10:
+            print(f"⚠️ Suspicious short song name extracted: '{cleaned_song}' - requiring manual confirmation")
+            manual_results = get_spotify_fallback_results(cleaned_song, cleaned_artist, access_token)
+            return {
+                'success': False,
+                'method': 'manual_selection',
+                'song_name': cleaned_song,
+                'artist_name': cleaned_artist,
+                'album_name': 'Unknown',
+                'spotify_track': None,
+                'confidence': 0.0,
+                'fallback_results': manual_results
+            }
+        
         print(f"✅ Spotify search successful: {spotify_result['name']} by {spotify_result['artists'][0]['name']}")
         return {
             'success': True,

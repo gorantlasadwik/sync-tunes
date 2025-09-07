@@ -3524,8 +3524,6 @@ def sync_playlist_songs():
         # User feedback
         # Check if there are pending tracks for user confirmation
         pending_tracks = session.get(f'pending_tracks_{current_user.user_id}', [])
-        print(f"=== SYNC DEBUG END ===")
-        print(f"Pending tracks in session: {len(pending_tracks)}")
         
         if platform_songs_added > 0:
             flash(f'Successfully added {platform_songs_added} songs to {platform.platform_name} playlist! Note: Spotify UI may take a few minutes to update.')
@@ -3562,14 +3560,12 @@ def confirm_fallback_tracks():
         for i, track_data in enumerate(pending_tracks):
             # Check for new data structure
             if 'song_info' not in track_data and 'original_song' not in track_data:
-                print(f"ERROR: Track {i} missing both 'song_info' and 'original_song' keys")
                 flash('Error: Invalid track data structure.')
                 return redirect(url_for('dashboard'))
         
         return render_template('confirm_fallback_tracks.html', pending_tracks=pending_tracks)
         
     except Exception as e:
-        print(f"ERROR in confirm_fallback_tracks: {e}")
         flash(f'Error loading fallback tracks: {str(e)}')
         return redirect(url_for('dashboard'))
 

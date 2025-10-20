@@ -4,7 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt && python init_db.py
-    startCommand: gunicorn app:app
+    startCommand: gunicorn --timeout 120 --workers 2 --threads 4 app:app
     envVars:
       - key: SECRET_KEY
         value: sync-tunes-secret-key-2024-secure-random-string

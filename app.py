@@ -130,7 +130,16 @@ def send_otp_email(email, otp, user_name):
         </html>
         """
         
-        mail.send(msg)
+        # Send email asynchronously to avoid blocking request and timeouts
+        from threading import Thread
+        def send_async_email(m):
+            try:
+                with app.app_context():
+                    mail.send(m)
+            except Exception as e:
+                print(f"Async email sending error: {e}")
+
+        Thread(target=send_async_email, args=(msg,), daemon=True).start()
         return True
     except Exception as e:
         print(f"Email sending error: {e}")

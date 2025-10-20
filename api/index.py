@@ -7,9 +7,11 @@ PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, os.pardir))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from app import app as vercel_app  # Flask app instance defined in app.py
+from app import app as flask_app
+from vercel_wsgi import handle
 
-# Vercel Python expects a module-level variable named `app`
-app = vercel_app
+
+def handler(event, context):
+    return handle(flask_app, event, context)
 
 

@@ -18,7 +18,7 @@ from ytmusicapi import YTMusic
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini API
+# Configure Gemini API 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 # Note: Gemini quota tracking moved to user-specific session storage
 

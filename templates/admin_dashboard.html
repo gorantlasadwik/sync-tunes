@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Sync Tunes{% endblock %}
+
+{% block content %}
+<h1>Admin Dashboard</h1>
+
+<div class="grid">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">System Overview</h3>
+        </div>
+        
+        <div class="grid">
+            <div class="card" style="background-color: #004400; border-color: #00aa00;">
+                <h4>Total Users</h4>
+                <p style="font-size: 2rem; color: #00ff00;">{{ users|length }}</p>
+            </div>
+            
+            <div class="card" style="background-color: #004444; border-color: #00aaaa;">
+                <h4>Total Syncs</h4>
+                <p style="font-size: 2rem; color: #00ffff;">{{ sync_logs|length }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Recent Users</h3>
+        </div>
+        
+        {% if users %}
+            <div class="table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Platform Accounts</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                            <tr>
+                                <td>{{ user.name }}</td>
+                                <td>{{ user.email }}</td>
+                                <td>{{ user.platform_accounts|length }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No users found.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Recent Sync Activity</h3>
+    </div>
+    
+    {% if sync_logs %}
+        <div class="table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>User</th>
+                        <th>Source Platform</th>
+                        <th>Destination Platform</th>
+                        <th>Playlist</th>
+                        <th>Songs Synced</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in sync_logs %}
+                        <tr>
+                            <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>{{ log.user.name }}</td>
+                            <td>
+                                {% set source_account = log.source_account %}
+                                {% if source_account and source_account.platform %}
+                                    {{ source_account.platform.platform_name }}
+                                {% else %}
+                                    Unknown
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set dest_account = log.destination_account %}
+                                {% if dest_account and dest_account.platform %}
+                                    {{ dest_account.platform.platform_name }}
+                                {% else %}
+                                    Unknown
+                                {% endif %}
+                            </td>
+                            <td>{{ log.playlist.name if log.playlist else 'Unknown' }}</td>
+                            <td>{{ log.total_songs_synced }}</td>
+                            <td>
+                                {% if log.songs_added > 0 %}
+                                    <span style="color: #00ff00;">✓ Success</span>
+                                {% else %}
+                                    <span style="color: #ff4444;">✗ Failed</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p>No sync logs found.</p>
+    {% endif %}
+    
+    <div class="text-center mt-2">
+        <a href="{{ url_for('logs') }}" class="btn btn-secondary">View All Logs</a>
+    </div>
+</div>
+
+<div class="card" style="background-color: #004444; border-color: #00aaaa;">
+    <div class="card-header">
+        <h3 class="card-title">Admin Actions</h3>
+    </div>
+    
+    <div class="grid">
+        <div>
+            <h4>System Monitoring</h4>
+            <p>Monitor user activity, sync performance, and system health.</p>
+        </div>
+        
+        <div>
+            <h4>User Management</h4>
+            <p>View user accounts, platform connections, and troubleshoot issues.</p>
+        </div>
+        
+        <div>
+            <h4>Sync Analytics</h4>
+            <p>Track sync success rates, popular playlists, and platform usage.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

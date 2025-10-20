@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Sync Tunes{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+    <h1 style="margin: 0;">Welcome, {{ current_user.name }}!</h1>
+    
+    <!-- Social Links - Top Right -->
+    <div style="display: flex; gap: 1rem; align-items: center;">
+        <a href="https://www.linkedin.com/in/sadwik-gorantla-042362282/" 
+           target="_blank" 
+           style="color: #0077b5; font-size: 2rem; text-decoration: none; transition: all 0.3s ease;"
+           title="Connect on LinkedIn">
+            <i class="fab fa-linkedin"></i>
+        </a>
+        <a href="https://github.com/gorantlasadwik" 
+           target="_blank" 
+           style="color: #333; font-size: 2rem; text-decoration: none; transition: all 0.3s ease;"
+           title="View GitHub Profile">
+            <i class="fab fa-github"></i>
+        </a>
+    </div>
+</div>
+
+<!-- Section 1: Platform Connect (2 divided parts) -->
+<div class="row mb-4">
+    <!-- Part 1: Connected Platforms -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3 class="card-title">Connected Platforms</h3>
+            </div>
+            <div class="card-body">
+                {% if user_accounts %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Platform</th>
+                                    <th>Username</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for account in user_accounts %}
+                                    <tr>
+                                        <td>
+                                            {% set platform = account.platform %}
+                                            {{ platform.platform_name if platform else "Unknown Platform" }}
+                                        </td>
+                                        <td>{{ account.username_on_platform }}</td>
+                                        <td>
+                                            {% if account.auth_token %}
+                                                <span class="badge bg-success">✓ Connected</span>
+                                            {% else %}
+                                                <span class="badge bg-danger">✗ Disconnected</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No platforms connected yet.</p>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <a href="{{ url_for('connect_platform') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus"></i> Connect Platform
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Part 2: Platform Actions -->
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3 class="card-title">Platform Actions</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if user_accounts %}
+                        <a href="{{ url_for('refresh_playlists') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-sync"></i> Refresh Playlists
+                        </a>
+                        <a href="{{ url_for('logs') }}" class="btn btn-outline-info">
+                            <i class="fas fa-history"></i> View Sync History
+                        </a>
+                    {% else %}
+                        <p class="text-muted">Connect a platform to access actions.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Section 2: Sync Information Note -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h3 class="card-title">ℹ️ How Sync Works</h3>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="text-success">✅ Auto-Added Songs</h6>
+                <ul class="small text-muted">
+                    <li>Exact artist matches</li>
+                    <li>High confidence AI matches</li>
+                    <li>No confirmation needed</li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-warning">⚠️ Manual Confirmation</h6>
+                <ul class="small text-muted">
+                    <li>Songs not found on Spotify</li>
+                    <li>Alternative track suggestions</li>
+                    <li>User selects correct match</li>
+                </ul>
+            </div>
+        </div>
+        <div class="mt-3">
+            <small class="text-info">
+                <i class="fas fa-info-circle"></i> 
+                Our hybrid approach uses regex pre-cleaning → Spotify search → YouTube Music API → AI recognition → manual selection for optimal accuracy.
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Section 3: All Playlists -->
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Your Playlists</h3>
+    </div>
+        
+        {% if playlists %}
+            <div class="table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Platform</th>
+                            <th>Account</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for playlist in playlists %}
+                            <tr>
+                                <td>{{ playlist.name }}</td>
+                                <td>{{ playlist.platform_name }}</td>
+                                <td>{{ playlist.account_username }}</td>
+                                <td>
+                                    <div class="d-flex gap-2">
+                                        <a href="{{ url_for('playlist_details', playlist_id=playlist.playlist_id) }}" 
+                                           class="btn btn-info btn-sm">
+                                            <i class="fas fa-eye"></i> View Details
+                                        </a>
+                                        {% if playlist.song_count > 0 %}
+                                        <span class="badge bg-secondary">{{ playlist.song_count }} songs</span>
+                                        {% endif %}
+                                        {% if user_accounts|length > 1 %}
+                                            <a href="{{ url_for('playlist_details', playlist_id=playlist.playlist_id) }}" 
+                                               class="btn btn-primary btn-sm">
+                                                <i class="fas fa-sync"></i> Sync
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p>No playlists found. Connect your platforms to see your playlists.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% if user_accounts|length < 2 %}
+    <div class="card" style="background-color: #004444; border-color: #00aaaa;">
+        <div class="card-header">
+            <h3 class="card-title">Next Steps</h3>
+        </div>
+        <p>To start syncing playlists, you need to connect both Spotify and YouTube accounts.</p>
+        <a href="{{ url_for('connect_platform') }}" class="btn btn-primary">Connect Platform</a>
+    </div>
+{% else %}
+    <div class="card" style="background-color: #004400; border-color: #00aa00;">
+        <div class="card-header">
+            <h3 class="card-title">Ready to Sync!</h3>
+        </div>
+        <p>You have both platforms connected. You can now sync individual playlists or sync all at once.</p>
+                 <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+             <a href="{{ url_for('refresh_playlists') }}" class="btn btn-info">
+                 <i class="fas fa-sync"></i> Refresh Playlists
+             </a>
+             <a href="{{ url_for('logs') }}" class="btn btn-secondary">
+                 <i class="fas fa-history"></i> View Sync Logs
+             </a>
+         </div>
+    </div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Recent Sync Activity</h3>
+    </div>
+    
+    <div class="text-center">
+        <a href="{{ url_for('logs') }}" class="btn btn-secondary">View All Logs</a>
+    </div>
+</div>
+
+<!-- AI Parsing Status Section - Moved to Bottom -->
+<div class="card" style="background: linear-gradient(135deg, #4CAF50, #66BB6A); border: none; margin-top: 2rem;">
+    <div class="card-header" style="background: transparent; border: none;">
+        <h3 class="card-title" style="color: white; margin: 0;">🤖 AI Parsing Status</h3>
+    </div>
+    <div style="padding: 1rem; text-align: center;">
+        <p style="color: white; margin: 0 0 1rem 0; font-size: 0.9rem;">
+            Advanced AI parsing with Gemini + Groq fallback. Quotas reset automatically every 24 hours.
+        </p>
+        <div style="background: rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 5px; font-size: 0.8rem; display: inline-block;">
+            <i class="fas fa-robot"></i> Gemini + Groq Fallback
+        </div>
+    </div>
+</div>
+{% endblock %}

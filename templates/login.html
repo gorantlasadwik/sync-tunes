@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Sync Tunes{% endblock %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 0 auto;">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Login</h2>
+        </div>
+        
+        <form method="POST" id="loginForm">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <!-- Custom CAPTCHA -->
+            <div class="form-group" style="margin: 1rem 0;">
+                <label for="captcha">Security Check: Type the code below (case-sensitive)</label>
+                <div style="background-color: #333; padding: 1rem; border-radius: 4px; margin: 0.5rem 0; text-align: center; font-size: 1.8rem; font-weight: bold; letter-spacing: 0.3em; color: #00ff00; font-family: 'Courier New', monospace;">
+                    {{ captcha_word }}
+                </div>
+                <input type="text" id="captcha" name="captcha" placeholder="Type the code above exactly" required style="width: 100%; padding: 0.75rem; border: 2px solid #333333; border-radius: 4px; background-color: #111111; color: #ffffff; font-size: 1rem; font-family: 'Courier New', monospace;">
+                <small style="color: #888; font-size: 0.8rem; margin-top: 0.25rem; display: block;">Enter exactly as shown (case-sensitive)</small>
+                {% if captcha_error %}
+                    <div class="alert alert-danger" style="margin-top: 0.5rem; font-size: 0.875rem;">
+                        {{ captcha_error }}
+                    </div>
+                {% endif %}
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+        </form>
+        
+        <div class="text-center mt-2">
+            <p>Don't have an account? <a href="{{ url_for('register') }}" style="color: #ffffff;">Register here</a></p>
+            <p style="margin-top: 1rem;">
+                <a href="{{ url_for('forgot_password') }}" style="color: #00aaff; text-decoration: none; font-size: 0.9rem;">
+                    <i class="fas fa-key"></i> Forgot Password?
+                </a>
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+// Client-side validation for CAPTCHA
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    const captchaInput = document.getElementById('captcha');
+    if (!captchaInput.value.trim()) {
+        e.preventDefault();
+        alert('Please complete the security check by typing the word above.');
+        return false;
+    }
+});
+</script>
+{% endblock %}

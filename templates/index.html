@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Sync Tunes - Home{% endblock %}
+
+{% block content %}
+<div class="text-center">
+    <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">Sync Tunes</h1>
+    <p style="font-size: 1.5rem; margin-bottom: 2rem; color: #cccccc;">
+        Synchronize your playlists between streaming platforms with a single click
+    </p>
+    
+    <div class="mb-2">
+        <p style="font-size: 1.2rem; margin-bottom: 2rem; max-width: 800px; margin-left: auto; margin-right: auto;">
+            Connect your Spotify and YouTube Music accounts to seamlessly sync playlists between platforms. 
+            No more manually recreating playlists - let Sync Tunes handle the work for you.
+        </p>
+    </div>
+    
+    <div class="grid" style="max-width: 600px; margin: 0 auto;">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">🎵 Spotify</h3>
+            </div>
+            <p>Connect your Spotify account to access your playlists and favorite tracks.</p>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">🎬 YouTube Music</h3>
+            </div>
+            <p>Link your YouTube Music account to sync playlists across platforms.</p>
+        </div>
+    </div>
+    
+    <div class="mt-2">
+        {% if current_user.is_authenticated %}
+            <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+        {% else %}
+            <a href="{{ url_for('register') }}" class="btn btn-primary">Get Started</a>
+            <a href="{{ url_for('login') }}" class="btn btn-secondary" style="margin-left: 1rem;">Login</a>
+        {% endif %}
+    </div>
+    
+    <div class="mt-2" style="margin-top: 3rem;">
+        <h2 style="margin-bottom: 1rem;">How It Works</h2>
+        <div class="grid">
+            <div class="card">
+                <h4>1. Connect Accounts</h4>
+                <p>Authenticate with both Spotify and YouTube Music platforms.</p>
+            </div>
+            <div class="card">
+                <h4>2. Select Playlist</h4>
+                <p>Choose which playlist you want to sync between platforms.</p>
+            </div>
+            <div class="card">
+                <h4>3. One-Click Sync</h4>
+                <p>Click sync and let our system match and transfer your tracks.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

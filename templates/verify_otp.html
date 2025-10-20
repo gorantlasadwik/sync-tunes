@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Verify OTP - Sync Tunes{% endblock %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 0 auto;">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">📧 Verify Code</h2>
+        </div>
+        
+        <div class="card-body">
+            <p style="color: #888; margin-bottom: 1.5rem;">
+                We've sent a 6-digit verification code to <strong>{{ email }}</strong>
+            </p>
+            
+            <form method="POST">
+                <div class="form-group">
+                    <label for="otp">Verification Code</label>
+                    <input type="text" id="otp" name="otp" required 
+                           placeholder="Enter 6-digit code"
+                           maxlength="6"
+                           style="width: 100%; padding: 0.75rem; border: 2px solid #333333; border-radius: 4px; background-color: #111111; color: #ffffff; font-size: 1.5rem; text-align: center; font-family: 'Courier New', monospace; letter-spacing: 0.2em;">
+                </div>
+                
+                <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">
+                    <i class="fas fa-check"></i> Verify Code
+                </button>
+            </form>
+            
+            <div class="text-center">
+                <p style="margin: 0;">
+                    <a href="{{ url_for('forgot_password') }}" style="color: #ffffff; text-decoration: none;">
+                        <i class="fas fa-arrow-left"></i> Back to Email
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Timer and Info Card -->
+    <div class="card" style="margin-top: 1rem; background-color: #1a1a1a; border-color: #333;">
+        <div class="card-body">
+            <h6 style="color: #ffaa00; margin-bottom: 0.5rem;">
+                <i class="fas fa-clock"></i> Important:
+            </h6>
+            <ul style="color: #ccc; font-size: 0.9rem; margin: 0; padding-left: 1.2rem;">
+                <li>Code expires in 10 minutes</li>
+                <li>Check your spam folder if not received</li>
+                <li>Enter the code exactly as shown</li>
+                <li>No spaces or special characters</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-focus on OTP input
+document.getElementById('otp').focus();
+
+// Auto-format OTP input (numbers only)
+document.getElementById('otp').addEventListener('input', function(e) {
+    // Remove any non-numeric characters
+    this.value = this.value.replace(/[^0-9]/g, '');
+    
+    // Auto-submit when 6 digits are entered
+    if (this.value.length === 6) {
+        // Small delay for better UX
+        setTimeout(() => {
+            this.form.submit();
+        }, 500);
+    }
+});
+
+// Prevent form submission if OTP is not 6 digits
+document.querySelector('form').addEventListener('submit', function(e) {
+    const otp = document.getElementById('otp').value;
+    if (otp.length !== 6) {
+        e.preventDefault();
+        alert('Please enter a valid 6-digit code.');
+    }
+});
+</script>
+{% endblock %}

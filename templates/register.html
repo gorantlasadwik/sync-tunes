@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Sync Tunes{% endblock %}
+
+{% block content %}
+<div style="max-width: 400px; margin: 0 auto;">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Create Account</h2>
+        </div>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Create Account</button>
+        </form>
+        
+        <div class="text-center mt-2">
+            <p>Already have an account? <a href="{{ url_for('login') }}" style="color: #ffffff;">Login here</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

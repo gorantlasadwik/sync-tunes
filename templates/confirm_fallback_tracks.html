@@ -1,0 +1,156 @@
+
+{% extends "base.html" %}
+
+{% block title %}Confirm Fallback Tracks{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2>🎵 Confirm Fallback Tracks</h2>
+            <p class="text-muted">Some songs couldn't be found with the exact artist name. Please confirm which tracks you'd like to add to your playlist.</p>
+            
+            {% if pending_tracks %}
+                <p class="text-info">Found {{ pending_tracks|length }} pending tracks</p>
+                {% for track_data in pending_tracks %}
+                {% set track_index = loop.index0 %}
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="fas fa-music"></i> 
+                            Track {{ track_index + 1 }}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Handle both old and new data structures -->
+                        {% if track_data.get('song_info') %}
+                            <p><strong>Song Info:</strong> {{ track_data['song_info'].get('title', 'No title') }}</p>
+                        {% elif track_data.get('original_song') %}
+                            <p><strong>Song Info:</strong> {{ track_data['original_song'].get('title', 'No title') }}</p>
+                        {% endif %}
+                        
+                        {% if track_data.get('spotify_track') %}
+                            <p><strong>Spotify Track:</strong> {{ track_data['spotify_track'].get('name', 'No name') }}</p>
+                            <form method="POST" action="{{ url_for('confirm_track') }}" class="d-inline">
+                                <input type="hidden" name="track_index" value="{{ track_index }}">
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    <i class="fas fa-check"></i> Add This Track
+                                </button>
+                            </form>
+                        {% elif track_data.get('ai_results') %}
+                            <p><strong>AI Comparison Results:</strong> Both Gemini and Groq gave different results</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-primary">
+                                        <div class="card-header bg-primary text-white">
+                                            <h6 class="mb-0"><i class="fas fa-robot"></i> Gemini AI Result</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p><strong>Song:</strong> {{ track_data['ai_results']['gemini']['song_name'] }}</p>
+                                            <p><strong>Artist:</strong> {{ track_data['ai_results']['gemini']['artist_name'] }}</p>
+                                            <p><strong>Album:</strong> {{ track_data['ai_results']['gemini']['album_name'] }}</p>
+                                            <p><strong>Confidence:</strong> {{ "%.1f"|format(track_data['ai_results']['gemini']['confidence'] * 100) }}%</p>
+                                            <form method="POST" action="{{ url_for('confirm_ai_result') }}" class="d-inline">
+                                                <input type="hidden" name="track_index" value="{{ track_index }}">
+                                                <input type="hidden" name="ai_choice" value="gemini">
+                                                <button type="submit" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-check"></i> Use Gemini Result
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-success">
+                                        <div class="card-header bg-success text-white">
+                                            <h6 class="mb-0"><i class="fas fa-brain"></i> Groq AI Result</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p><strong>Song:</strong> {{ track_data['ai_results']['groq']['song_name'] }}</p>
+                                            <p><strong>Artist:</strong> {{ track_data['ai_results']['groq']['artist_name'] }}</p>
+                                            <p><strong>Album:</strong> {{ track_data['ai_results']['groq']['album_name'] }}</p>
+                                            <p><strong>Confidence:</strong> {{ "%.1f"|format(track_data['ai_results']['groq']['confidence'] * 100) }}%</p>
+                                            <form method="POST" action="{{ url_for('confirm_ai_result') }}" class="d-inline">
+                                                <input type="hidden" name="track_index" value="{{ track_index }}">
+                                                <input type="hidden" name="ai_choice" value="groq">
+                                                <button type="submit" class="btn btn-success btn-sm">
+                                                    <i class="fas fa-check"></i> Use Groq Result
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif track_data.get('fallback_results') %}
+                            <p><strong>Fallback Results:</strong> {{ track_data['fallback_results']|length }} found</p>
+                            {% for fallback_track in track_data['fallback_results'] %}
+                                <div class="mb-2 p-2 border rounded">
+                                    <strong>{{ fallback_track.get('name', 'No name') }}</strong> by {{ fallback_track.get('artists', [{}])[0].get('name', 'Unknown') }}
+                                    <br>
+                                    <small class="text-muted">Album: {{ fallback_track.get('album', {}).get('name', 'Unknown') }}</small>
+                                    <form method="POST" action="{{ url_for('confirm_track') }}" class="d-inline">
+                                        <input type="hidden" name="track_index" value="{{ track_index }}">
+                                        <input type="hidden" name="fallback_index" value="{{ loop.index0 }}">
+                                        <button type="submit" class="btn btn-success btn-sm">
+                                            <i class="fas fa-check"></i> Add This Track
+                                        </button>
+                                    </form>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-warning">No Spotify track found</p>
+                        {% endif %}
+                        
+                        <div class="mt-3">
+                            <form method="POST" action="{{ url_for('skip_track') }}" class="d-inline">
+                                <input type="hidden" name="track_index" value="{{ track_index }}">
+                                <button type="submit" class="btn btn-secondary">
+                                    <i class="fas fa-times"></i> Skip This Song
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No pending tracks to confirm.
+                </div>
+            {% endif %}
+            
+            <div class="mt-4">
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card-header.bg-warning {
+    background-color: #fff3cd !important;
+    border-color: #ffeaa7;
+}
+
+.card.border-primary {
+    border-color: #007bff !important;
+}
+
+.card.border-primary:hover {
+    box-shadow: 0 4px 8px rgba(0,123,255,0.2);
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+.btn-success:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(40,167,69,0.3);
+}
+
+.btn-secondary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(108,117,125,0.3);
+}
+</style>
+{% endblock %}

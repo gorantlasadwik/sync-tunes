@@ -10,7 +10,7 @@ python-dotenv==1.0.0
 bcrypt==4.0.1
 google-auth-oauthlib==1.0.0
 google-auth==2.23.0
-psycopg2-binary==2.9.7
+psycopg2-binary==2.9.9
 gunicorn==21.2.0
 google-generativeai==0.3.2
 thefuzz==0.22.1

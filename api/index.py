@@ -8,10 +8,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from app import app as flask_app
-from vercel_wsgi import handle
 
-
-def handler(event, context):
-    return handle(flask_app, event, context)
+# Expose WSGI app for @vercel/python
+app = flask_app
 
 

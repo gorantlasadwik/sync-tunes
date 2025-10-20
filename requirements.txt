@@ -18,4 +18,3 @@ groq==0.4.2
 httpx==0.27.2
 requests-html==0.10.0
 Flask-Mail==0.9.1
-vercel-wsgi==0.2.3

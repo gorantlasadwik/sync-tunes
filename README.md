@@ -20,6 +20,9 @@ Sync Tunes is a powerful web application that bridges the gap between Spotify an
 - **📊 Sync Tracking**: Detailed logs and analytics of all sync operations
 - **⚡ Real-time Processing**: Fast and efficient playlist synchronization
 - **🔒 Secure Authentication**: OAuth 2.0 integration with both platforms
+- **🛡️ Enhanced Security**: Custom CAPTCHA system with random character generation
+- **📧 Password Recovery**: Forgot password with OTP email verification via Brevo SMTP
+- **🎨 Professional UI**: Responsive templates with modern design
 
 ## 🚀 Live Demo
 
@@ -220,6 +223,10 @@ GOOGLE_REDIRECT_URI=your-redirect-uri
 - **Session Management**: Secure session handling with automatic cleanup
 - **Password Security**: bcrypt hashing with salt
 - **API Security**: Secure token storage and validation
+- **Custom CAPTCHA**: Random character generation with mixed case, numbers, and symbols
+- **OTP Email Verification**: Secure password reset with 6-digit codes via Brevo SMTP
+- **Environment Variables**: All sensitive data stored securely outside source code
+- **Session-based Security**: OTP validation with 10-minute expiry and auto-cleanup
 
 ## 📊 Monitoring & Analytics
 
